@@ -1,118 +1,152 @@
 ---
-title: "Safety & Data Integrity"
-description: "How sheets-mcp protects your spreadsheet data from accidental destruction."
+title: "Safety Systems"
+description: "Every guard that runs before a write. Fail-closed by default. Source-verified from sheets-safety.ts and route.ts."
 ---
 
-sheets-mcp is built on a **fail-closed** principle: when a write operation is ambiguous or potentially destructive, the tool blocks the operation and returns a structured error instead of proceeding silently.
+sheets-mcp runs **two sequential safety layers** before every write — a formula check and a schema guard. Both are fail-closed: they block the write and return a structured error unless explicitly overridden. SQL tools have a separate, non-bypassable Postgres sandbox.
 
 ---
 
-## Formula overwrite protection
+## Layer 1 — Formula overwrite guard (`assertNoFormulaOverwrite`)
 
-### What it prevents
+Runs on every `write_range` and `transform_range` call. Steps in order:
 
-Silently overwriting a cell that contains a formula (e.g. `=SUM(A1:A10)`) with a static value is one of the most common ways AI agents corrupt spreadsheets. Once a formula is replaced, the original cannot be recovered without version history.
-
-### How it works
-
-Before every `write_range` or `transform_range` call, sheets-mcp:
-
-1. Fetches the target range using `valueRenderOption: FORMULA`
-2. Scans every cell for a leading `=` character
-3. If any formula cells are found, the write is **blocked** with this error:
+1. If `allowFormulaOverwrite: true` → skip this guard entirely
+2. Fetch the target range with `valueRenderOption: FORMULA`
+3. Scan every cell for values starting with `=`
+4. If any formula cells found → **block the write** with a detailed error listing every affected cell address
 
 ```
 write_range blocked because the target range contains formula cells (3):
-B2, C2, D2. Pass allowFormulaOverwrite: true only if you intend to
-replace formulas with static values.
+Sheet1!B2, Sheet1!B3, Sheet1!B4
+Pass allowFormulaOverwrite: true only if you intend to replace formulas with static values.
 ```
 
-### Bypassing safely
-
-If you genuinely want to replace formulas with static values, pass `allowFormulaOverwrite: true` explicitly:
-
-```json
-{
-  "tool": "write_range",
-  "spreadsheetId": "...",
-  "range": "Sheet1!B2:D2",
-  "values": [["100", "200", "300"]],
-  "allowFormulaOverwrite": true
-}
-```
-
-<Warning>
-  This bypass is permanent. Once a formula is overwritten with a static value, it cannot be restored without Google Sheets version history.
-</Warning>
+This is distinct from the ARRAYFORMULA spill guard (see Layer 2). This guard catches **any** formula — `=SUM()`, `=VLOOKUP()`, `=IF()`, etc.
 
 ---
 
-## ARRAYFORMULA spill protection
+## Layer 2 — Schema guard (`runPreWriteSchemaGuards`)
 
-### What it prevents
+Runs on every write tool after Layer 1. Uses the **schema cache** (`__schema__` key in `sheet_snapshots`, TTL = 300 seconds) to avoid repeated API calls.
 
-`ARRAYFORMULA` cells automatically expand their output into adjacent cells. Writing static data into those downstream cells silently breaks the formula's output range.
+The schema is built from two cheap API calls:
+- `spreadsheets.get` — fetches frozen rows, protected ranges, conditional format count, merges, banded ranges
+- `spreadsheets.values.get` on row 2 only, `valueRenderOption: FORMULA` — detects ARRAYFORMULA anchors
 
-### How it works
+### Protected Range check
 
-sheets-mcp detects ARRAYFORMULA patterns in the sheet schema (cached for 300 seconds). If your write target overlaps a column that contains an ARRAYFORMULA in row 2, the write is blocked:
-
-```
-⚠️ A target column contains an ARRAYFORMULA. Writing static values will
-permanently destroy this formula. Pass allowFormulaOverwrite: true to
-confirm you intend to replace the formula with static data.
-```
-
-The schema cache stores `arrayFormulaColumns` (e.g. `["B", "C"]`) so this check runs without an extra API call on repeated writes.
-
----
-
-## Protected Range enforcement
-
-Google Sheets allows users to lock ranges so only specific editors can modify them. sheets-mcp respects these locks:
+Compares the write footprint (computed from the actual `values[][]` array dimensions) against every `protectedRange` in the schema.
 
 | Protection type | Behaviour |
 |---|---|
-| **Locked (strict)** | Write is **blocked**. Error: `"range overlaps a Protected Range (locked). The sheet owner has locked this range. This cannot be overridden."` |
-| **Warning-only** | Write proceeds but returns `⚠️ Target range has a user-set protection warning.` |
+| `warningOnly: false` (strict lock) | **Write blocked.** Returns `"Write blocked — range overlaps a Protected Range (locked). This cannot be overridden."` |
+| `warningOnly: true` (soft warning) | Write proceeds. `_warnings` array added to response: `"⚠️ Target range has a user-set protection warning."` |
 
-Protected range data is fetched via the schema cache and checked before every write.
+### ARRAYFORMULA column guard
+
+Checks if any column in the write footprint matches an ARRAYFORMULA anchor column (detected from row 2 formulas in the schema cache). If a match is found and `allowFormulaOverwrite` is `false`:
+
+```
+⚠️ A target column contains an ARRAYFORMULA. Writing static values will
+permanently destroy this formula. Pass allowFormulaOverwrite: true to confirm
+you intend to replace the formula with static data.
+```
+
+<Warning>
+  The ARRAYFORMULA guard checks **column overlap only**, not cell overlap. If any cell in the target range shares a column with an ARRAYFORMULA anchor in row 2, the write is blocked. This is intentionally conservative.
+</Warning>
+
+### What `_schema` looks like (returned by `read_range`)
+
+`read_range` always returns the schema alongside values so agents can reason about the sheet structure before writing:
+
+```json
+{
+  "values": [["Name","Revenue","Status"], ["Acme","12000","Active"]],
+  "_schema": {
+    "layout": { "frozenRows": 1, "frozenColumns": 0 },
+    "semantics": ["Has 2 conditional format rules"],
+    "constraints": [],
+    "protectedRanges": [
+      { "range": { "startRowIndex": 0, "endRowIndex": 1 }, "warningOnly": false, "description": "Header row" }
+    ],
+    "arrayFormulaColumns": ["C"],
+    "warnings": ["⚠️ Column C contains ARRAYFORMULA — do not write to C2:C"],
+    "mergedTitleRows": []
+  }
+}
+```
+
+Agents should check `_schema.arrayFormulaColumns` and `_schema.protectedRanges` before calling any write tool.
 
 ---
 
-## SQL injection guard (`analyze_range` / `transform_range`)
+## Layer 3 — SQL sandbox (`analyze_range` + `transform_range`)
 
-`analyze_range` lets agents run arbitrary Postgres SQL against sheet data. To prevent abuse:
+These tools execute user-supplied SQL inside a hardened Postgres transaction. Three enforcement levels:
 
-1. **Statement chaining blocked** — the `;` character is stripped from all queries before execution
-2. **Mutation keywords blocked** — `DROP`, `DELETE`, `UNION` are rejected via regex before the query reaches Postgres
-3. **Read-only transaction** — all queries run inside `BEGIN READ ONLY` — even if a mutation somehow bypassed the regex, Postgres would reject it
-4. **Hard row limit** — every query has an automatic `LIMIT 1000` appended, preventing runaway result sets from overwhelming the agent context
+### Regex guard (application layer)
+
+Applied before the query reaches Postgres:
+
+| Pattern stripped/blocked | Why |
+|---|---|
+| `;` stripped from query | Prevents statement chaining (`SELECT 1; DROP TABLE users`) |
+| `DROP` in query → rejected | Prevents schema destruction |
+| `DELETE` in query → rejected | Prevents data deletion via Data-Modifying CTEs |
+| `UNION` stripped | Prevents data exfiltration via UNION-based injection |
+
+<Note>
+  The strip is designed not to break column names that contain blocked words. E.g. `data->>'Dropoff Time'` is safe — the UNION/DELETE stripping targets full keywords, not substrings inside string literals.
+</Note>
+
+### Transaction sandbox (Postgres layer)
+
+Every SQL execution uses a dedicated client from the pool and runs inside:
 
 ```sql
--- This query will be blocked before execution
-DROP TABLE sheet_data; SELECT * FROM pg_user;
-
--- This query runs safely
-SELECT data->'Category' AS cat, COUNT(*) AS total
-FROM sheet_data
-GROUP BY cat
-ORDER BY total DESC
-LIMIT 20
+BEGIN READ ONLY;
+SET LOCAL ROLE sheet_analyzer;
+-- user query runs here
+ROLLBACK;
 ```
+
+`sheet_analyzer` is a restricted Postgres role with:
+- No login privileges
+- No access to `account`, `user`, `session`, `apikey`, `sheet_snapshots`, or `write_history` tables
+- `GRANT USAGE ON SCHEMA public` only — enough to use Postgres built-in functions and types
+
+Even if the regex guard is bypassed and a Data-Modifying CTE is constructed, Postgres enforces `READ ONLY` at the transaction level and rejects it.
+
+### Context safety clamp
+
+`LIMIT 1000` is automatically appended to every `analyze_range` query before execution. This prevents runaway result sets from consuming the agent's context window.
+
+`transform_range` has a pre-execution cell count guard: if `rows × columns > 50,000`, the entire call is rejected before any SQL runs.
 
 ---
 
-## Response size clamp
+## Response size clamps (`read_range`)
 
-Every tool that returns row data runs through `truncateIfNeeded`:
+`read_range` applies output clamps after fetching data:
 
-- Hard limit: **1,000 rows** or **2 MB**, whichever is hit first
-- If truncated, the response includes a warning:
+| Constant | Value | Behaviour when exceeded |
+|---|---|---|
+| `MAX_RESPONSE_ROWS` | 1,000 | Result truncated to 1,000 rows |
+| `MAX_RESPONSE_BYTES` | 2 MB | Result truncated to 1,000 rows |
+
+When truncation occurs, a second content item is added to the MCP response:
 
 ```
-⚠️ read_range: Truncated to 1000 rows (original: 4821).
+⚠️ read_range: Truncated to 1000 rows (original: 14823).
 Use a narrower A1 range or analyze_range with SQL for large datasets.
 ```
 
-This prevents a single large `read_range` call from consuming the entire agent context window.
+**AX implication:** If an agent receives a truncation warning from `read_range`, it must switch to `analyze_range` with a SQL query. Reading in batches by adjusting the A1 range is also valid.
+
+---
+
+## Schema cache invalidation
+
+The `__schema__` cache (TTL = 300s) and all range caches are **fully cleared** from `sheet_snapshots` after every successful write (`write_range`, `transform_range`, `clear_range`, `manage_sheets`). This ensures that safety guards on the next write always see the current sheet structure.
