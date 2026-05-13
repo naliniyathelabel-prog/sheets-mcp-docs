@@ -1,0 +1,186 @@
+---
+title: "Analyze Tools"
+description: "analyze_range and transform_range — run Postgres SQL against live sheet data."
+---
+
+> **Note**
+>
+> **AX principle.** These are the highest-value tools in sheets-mcp for agents. They eliminate the need to transfer raw tabular data through the context window. An agent that uses `analyze_range` instead of `read_range` on a 5,000-row dataset uses ~99% less context.
+
+
+---
+
+## The SQL data model
+
+Both tools expose your sheet data as a CTE named `sheet_data` with a single `JSONB` column named `data`. Row 1 is treated as the header row. Each subsequent row becomes one JSONB object with header keys as string keys.
+
+**Exact SQL wrapper (from `route.ts`):**
+
+```sql
+WITH sheet_data AS (
+  SELECT value AS data FROM jsonb_array_elements($1::jsonb)
+)
+SELECT * FROM (<your query>) AS subquery
+```
+
+Your query is substituted as a subquery. The `$1` parameter is the JSONB array of row objects, passed as a bound parameter — not interpolated into the SQL string.
+
+**Data representation:**
+
+```
+Sheet row:  | Acme Corp | 12000 | Active |
+Headers:    | Name      | Revenue | Status |
+
+JSONB object: { "Name": "Acme Corp", "Revenue": "12000", "Status": "Active" }
+```
+
+> **⚠️ Warning**
+>
+> **All values are strings** — even numbers. Always cast before arithmetic: `(data->>\'Revenue\')::numeric`. Never assume a numeric type.
+
+
+---
+
+## `analyze_range`
+
+Executes Postgres SQL on a sheet range and returns the query result. The sheet is **never modified**.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
+| `range` | `string` | ✅ | A1 range to read (e.g. `Sheet1!A:F`) |
+| `query` | `string` | ✅ | Postgres SQL `SELECT` from `"sheet_data"` |
+
+### Response
+
+```json
+{
+  "results": [
+    { "region": "South", "total": 45200, "deals": 12 },
+    { "region": "North", "total": 31800, "deals": 9 }
+  ],
+  "_schema": { "arrayFormulaColumns": [], "protectedRanges": [], ... }
+}
+```
+
+The `_schema` is always included alongside query results — no extra tool call needed to inspect sheet structure.
+
+### Caching
+
+Fetched range data is cached in `sheet_snapshots` with **TTL = 60 seconds** per normalized A1 range key per user. Within the window, repeated calls skip the Sheets API entirely. The cache is invalidated after any write to the same spreadsheet.
+
+### Empty sheet handling
+
+If the range has 0 or 1 rows (no data rows), `analyze_range` returns immediately:
+
+```json
+{ "values": [], "_schema": { ... } }
+```
+
+No SQL is executed.
+
+### Example queries
+
+**Group and sum:**
+```sql
+SELECT data->>'Region' AS region,
+       COUNT(*)::int AS deals,
+       SUM((data->>'Revenue')::numeric) AS total
+FROM sheet_data
+GROUP BY region
+ORDER BY total DESC
+```
+
+**Filter:**
+```sql
+SELECT data->>'Name', data->>'Email'
+FROM sheet_data
+WHERE data->>'Status' = 'Active'
+  AND (data->>'Score')::numeric >= 80
+```
+
+**Inspect headers (always run this first on an unknown sheet):**
+```sql
+SELECT jsonb_object_keys(data) AS header FROM sheet_data LIMIT 50
+```
+
+---
+
+## `transform_range`
+
+Reads a range, runs a SQL `SELECT`, and **writes the results back** to the same range. The agent expresses the transformation as SQL — not as values.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | — | Target spreadsheet |
+| `range` | `string` | ✅ | — | Source AND target range (e.g. `Sheet1!A:F`) |
+| `query` | `string` | ✅ | — | Postgres SQL `SELECT` from `"sheet_data"` — output columns become new sheet columns |
+| `allowFormulaOverwrite` | `boolean` | ❌ | `false` | Bypass formula + ARRAYFORMULA protection |
+
+### Critical behaviour: no cache, ever
+
+`transform_range` **always fetches fresh data directly from Google Sheets** — it explicitly skips the `sheet_snapshots` cache. This is intentional: using stale cached data for a write-back would cause data corruption.
+
+### Write-back mechanics
+
+1. Fetch range from Sheets (no cache)
+2. Build JSONB objects from rows
+3. Check `rows × columns ≤ 50,000` (hard limit)
+4. Execute SQL in Postgres sandbox (`BEGIN READ ONLY`, `SET LOCAL ROLE sheet_analyzer`)
+5. Convert result fields → output headers; result rows → `string[][]`
+6. Reconstruct `[outputHeaders, ...outputRows]` as write values
+7. Run safety guards (formula check, schema guard) on the target range
+8. Save pre-write snapshot to `write_history`
+9. `spreadsheets.values.update` with `valueInputOption: RAW`
+10. Invalidate `sheet_snapshots` cache
+
+### Why `valueInputOption: RAW` on write-back?
+
+SQL output is always written as `RAW` (not `USER_ENTERED`) to prevent SQL output strings that happen to start with `=` from being interpreted as formulas. This is a deliberate security decision.
+
+### Pre-write snapshot
+
+Before writing, `transform_range` saves the original range to `write_history` (max rows ≤ 1,000, max size ≤ 2 MB). Use `restore_snapshot` to undo.
+
+### Safe workflow
+
+```
+Step 1: analyze_range(range, query)          → preview SQL output
+Step 2: if output is correct →
+        transform_range(range, same_query)   → write back
+Step 3: if something went wrong →
+        restore_snapshot(action: "list")     → find snapshot
+        restore_snapshot(action: "restore", snapshotId) → undo
+```
+
+### Example — normalize and enrich
+
+```sql
+SELECT
+  INITCAP(TRIM(data->>'Name'))                          AS "Name",
+  ROUND((data->>'Revenue')::numeric * 1.1, 2)::text    AS "Revenue",
+  data->>'Region'                                       AS "Region",
+  CASE
+    WHEN (data->>'Revenue')::numeric > 10000 THEN 'High'
+    WHEN (data->>'Revenue')::numeric > 5000  THEN 'Mid'
+    ELSE 'Low'
+  END                                                   AS "Tier"
+FROM sheet_data
+```
+
+---
+
+## SQL security constraints
+
+These apply to both tools and cannot be bypassed:
+
+| Constraint | Layer | Effect |
+|---|---|---|
+| `;` stripped | App regex | Statement chaining blocked |
+| `DROP` rejected | App regex | Schema destruction blocked |
+| `DELETE` rejected | App regex | Data-modifying CTEs blocked |
+| `UNION` stripped | App regex | Exfiltration via UNION blocked |
+| `BEGIN READ ONLY` | Postgres | Mutations rejected at DB level |
+| `SET LOCAL ROLE sheet_analyzer` | Postgres | No access to auth/session tables |
+| `LIMIT 1000` auto-appended | App | Result sets capped for context safety |
+| `rows × cols > 50,000` | App (transform only) | Oversized transforms rejected pre-SQL |
