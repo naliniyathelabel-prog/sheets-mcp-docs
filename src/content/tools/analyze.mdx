@@ -34,9 +34,7 @@ Headers:    | Name      | Revenue | Status |
 JSONB object: { "Name": "Acme Corp", "Revenue": "12000", "Status": "Active" }
 ```
 
-> **⚠️ Warning**
->
-> **All values are strings** — even numbers. Always cast before arithmetic: `(data->>\'Revenue\')::numeric`. Never assume a numeric type.
+**Warning:** **All values are strings** — even numbers. Always cast before arithmetic: `(data → >\'Revenue\')::numeric`. Never assume a numeric type.
 
 
 ---
@@ -47,9 +45,9 @@ Executes Postgres SQL on a sheet range and returns the query result. The sheet i
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
-| `range` | `string` | ✅ | A1 range to read (e.g. `Sheet1!A:F`) |
-| `query` | `string` | ✅ | Postgres SQL `SELECT` from `"sheet_data"` |
+| `spreadsheetId` | `string` | ✓ | Target spreadsheet |
+| `range` | `string` | ✓ | A1 range to read (e.g. `Sheet1!A:F`) |
+| `query` | `string` | ✓ | Postgres SQL `SELECT` from `"sheet_data"` |
 
 ### Response
 
@@ -83,9 +81,9 @@ No SQL is executed.
 
 **Group and sum:**
 ```sql
-SELECT data->>'Region' AS region,
+SELECT data → >'Region' AS region,
        COUNT(*)::int AS deals,
-       SUM((data->>'Revenue')::numeric) AS total
+       SUM((data → >'Revenue')::numeric) AS total
 FROM sheet_data
 GROUP BY region
 ORDER BY total DESC
@@ -93,10 +91,10 @@ ORDER BY total DESC
 
 **Filter:**
 ```sql
-SELECT data->>'Name', data->>'Email'
+SELECT data → >'Name', data → >'Email'
 FROM sheet_data
-WHERE data->>'Status' = 'Active'
-  AND (data->>'Score')::numeric >= 80
+WHERE data → >'Status' = 'Active'
+  AND (data → >'Score')::numeric >= 80
 ```
 
 **Inspect headers (always run this first on an unknown sheet):**
@@ -112,10 +110,10 @@ Reads a range, runs a SQL `SELECT`, and **writes the results back** to the same 
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `spreadsheetId` | `string` | ✅ | — | Target spreadsheet |
-| `range` | `string` | ✅ | — | Source AND target range (e.g. `Sheet1!A:F`) |
-| `query` | `string` | ✅ | — | Postgres SQL `SELECT` from `"sheet_data"` — output columns become new sheet columns |
-| `allowFormulaOverwrite` | `boolean` | ❌ | `false` | Bypass formula + ARRAYFORMULA protection |
+| `spreadsheetId` | `string` | ✓ | — | Target spreadsheet |
+| `range` | `string` | ✓ | — | Source AND target range (e.g. `Sheet1!A:F`) |
+| `query` | `string` | ✓ | — | Postgres SQL `SELECT` from `"sheet_data"` — output columns become new sheet columns |
+| `allowFormulaOverwrite` | `boolean` | ✗ | `false` | Bypass formula + ARRAYFORMULA protection |
 
 ### Critical behaviour: no cache, ever
 
@@ -157,12 +155,12 @@ Step 3: if something went wrong →
 
 ```sql
 SELECT
-  INITCAP(TRIM(data->>'Name'))                          AS "Name",
-  ROUND((data->>'Revenue')::numeric * 1.1, 2)::text    AS "Revenue",
-  data->>'Region'                                       AS "Region",
+  INITCAP(TRIM(data → >'Name'))                          AS "Name",
+  ROUND((data → >'Revenue')::numeric * 1.1, 2)::text    AS "Revenue",
+  data → >'Region'                                       AS "Region",
   CASE
-    WHEN (data->>'Revenue')::numeric > 10000 THEN 'High'
-    WHEN (data->>'Revenue')::numeric > 5000  THEN 'Mid'
+    WHEN (data → >'Revenue')::numeric > 10000 THEN 'High'
+    WHEN (data → >'Revenue')::numeric > 5000  THEN 'Mid'
     ELSE 'Low'
   END                                                   AS "Tier"
 FROM sheet_data
