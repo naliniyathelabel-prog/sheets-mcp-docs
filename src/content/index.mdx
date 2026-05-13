@@ -18,33 +18,25 @@ It exposes **14 source-verified tools** covering the full Sheets API v4 surface 
 
 ## Why sheets-mcp?
 
-<details>
-<summary>**Agent Experience (AX) first**</summary>
+**Agent Experience (AX) first**
 
 `analyze_range` and `transform_range` execute SQL directly against Sheets data in a sandboxed Postgres pool — your agent never pulls raw rows into its context window. The schema is co-delivered with every `read_range` call at zero extra latency. Tool schemas were trimmed 41% in v1.1.0 to maximize agent reasoning budget.
 
-</details>
 
-<details>
-<summary>**Fails closed, not open**</summary>
+**Fails closed, not open**
 
 `write_range` and `transform_range` block writes that would silently destroy formula cells or spill into ARRAYFORMULA ranges. Opt in to overrides explicitly with `allowFormulaOverwrite: true`. Protected Ranges are respected — strict locks cannot be bypassed programmatically.
 
-</details>
 
-<details>
-<summary>**Two auth paths**</summary>
+**Two auth paths**
 
 OIDC (OAuth2 + JWT) for interactive clients like Claude Desktop and Cursor — full browser-based consent flow. API key (`x-api-key` header) for headless scripts, CI pipelines, and custom agents. Both paths resolve to the same Google OAuth session internally.
 
-</details>
 
-<details>
-<summary>**Full undo support**</summary>
+**Full undo support**
 
 Every `write_range` and `transform_range` call saves a pre-write snapshot to `write_history`. `restore_snapshot` can list and restore up to 50 snapshots per spreadsheet — no manual backups needed.
 
-</details>
 
 ---
 
