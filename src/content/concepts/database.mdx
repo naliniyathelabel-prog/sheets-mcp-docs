@@ -54,9 +54,7 @@ Stores OAuth tokens per provider per user. The Google OAuth token that sheets-mc
 | `accessTokenExpiresAt` | `timestamptz` | Refresh triggered if within 5 min |
 | `scope` | `text` | Space-separated OAuth scopes |
 
-> **⚠️ Warning**
->
-> All column names in this table are **camelCase** and must be double-quoted in raw SQL queries. `lib/mcp-google.ts` uses `"accessToken"`, `"refreshToken"`, `"accessTokenExpiresAt"`, `"userId"` — without quotes, Postgres silently folds to lowercase and returns no rows.
+**Warning:** All column names in this table are **camelCase** and must be double-quoted in raw SQL queries. `lib/mcp-google.ts` uses `"accessToken"`, `"refreshToken"`, `"accessTokenExpiresAt"`, `"userId"` — without quotes, Postgres silently folds to lowercase and returns no rows.
 
 
 ---
@@ -178,7 +176,5 @@ SET LOCAL ROLE sheet_analyzer;
 ROLLBACK;
 ```
 
-> **⚠️ Warning**
->
-> If `sheet_analyzer` role does not exist, all `analyze_range` and `transform_range` calls fail with `role "sheet_analyzer" does not exist`. Run `scripts/slice4_role_isolation.sql` and `GRANT sheet_analyzer TO CURRENT_USER` before first deployment.
+**Warning:** If `sheet_analyzer` role does not exist, all `analyze_range` and `transform_range` calls fail with `role "sheet_analyzer" does not exist`. Run `scripts/slice4_role_isolation.sql` and `GRANT sheet_analyzer TO CURRENT_USER` before first deployment.
 
