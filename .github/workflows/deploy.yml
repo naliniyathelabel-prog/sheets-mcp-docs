@@ -1,21 +1,23 @@
-name: Deploy to Cloudflare Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Build & Deploy
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -25,11 +27,11 @@ jobs:
 
       - name: Build docs
         run: mintlify build
-        # Outputs to .mintlify/dist/
+        # Outputs static site to .mintlify/dist/
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
-          accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          command: pages deploy .mintlify/dist --project-name=sheets-mcp-docs --commit-dirty=true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .mintlify/dist
+          force_orphan: true
