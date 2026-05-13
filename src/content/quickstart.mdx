@@ -1,0 +1,76 @@
+---
+title: "Quickstart"
+description: "Connect your first AI agent to Google Sheets in under 5 minutes."
+---
+
+## Prerequisites
+
+- A Google account with at least one spreadsheet in Drive
+- Claude Desktop **or** Cursor IDE installed
+
+### Step 1 — Create your sheets-mcp account
+Go to [sheets-mcp-xi.vercel.app](https://sheets-mcp-xi.vercel.app) and sign in.
+
+    You can sign in with **Google** (recommended — this also grants Sheets/Drive access in one step) or with **email + password**. If you use email, you will need to connect your Google account separately from the dashboard afterwards.
+
+### Step 2 — Connect your Google account
+After login, your dashboard checks for a Google connection. If not connected, an amber banner appears — click **Connect Google Account**.
+
+    This grants sheets-mcp access to:
+    - Your Google Spreadsheets (read + write)
+    - Your Google Drive metadata (list + convert files)
+
+    > **Note**
+>
+> sheets-mcp requests `drive.readonly` + `drive.file` — **not** full Drive access. It cannot read arbitrary Drive files outside the spreadsheets scope.
+
+### Step 3 — Add to Claude Desktop
+Open `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) and add:
+
+    ```json
+    {
+      "mcpServers": {
+        "sheets-mcp": {
+          "url": "https://sheets-mcp-xi.vercel.app/api/mcp"
+        }
+      }
+    }
+    ```
+
+    Restart Claude Desktop. Claude will open a browser window to `sheets-mcp-xi.vercel.app/authorize` to complete the OIDC consent flow.
+
+    See the [full Claude Desktop guide](/guides/connect-claude) for a step-by-step walkthrough.
+
+### Step 4 — Add to Cursor
+In Cursor → Settings → Features → MCP Servers, add:
+
+    ```json
+    {
+      "mcpServers": {
+        "sheets-mcp": {
+          "url": "https://sheets-mcp-xi.vercel.app/api/mcp"
+        }
+      }
+    }
+    ```
+
+    See the [full Cursor guide](/guides/connect-cursor) for details including API key auth.
+
+### Step 5 — Run your first command
+In Claude Desktop or Cursor, try:
+
+    > "List all my Google Sheets spreadsheets"
+
+    Claude calls `list_spreadsheets` and returns your Drive file list. Then try:
+
+    > "Read the first 10 rows of Sheet1 in [paste a spreadsheetId]"
+
+    You now have a fully wired AI ↔ Google Sheets pipeline.
+
+---
+
+## What's next?
+
+- **[Authentication](/authentication)** — OIDC vs API key — understand both paths.
+- **[Tools Overview](/tools/overview)** — Browse all 14 tools with AX selection guide.
+- **[SQL in Sheets](/guides/sql-in-sheets)** — Aggregate sheet data with Postgres SQL.
