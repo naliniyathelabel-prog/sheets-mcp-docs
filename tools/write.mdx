@@ -4,42 +4,55 @@ description: "write_range, append_rows, clear_range, format_cells — modify she
 ---
 
 <Warning>
-  All write tools run [safety checks](/concepts/safety) before executing. Writes that would destroy formula cells or overlap Protected Ranges are blocked by default. Pass `allowFormulaOverwrite: true` only when intentionally replacing formulas with static values.
+  All write tools run [safety checks](/concepts/safety) before executing. Writes that would destroy formula cells or overlap Protected Ranges are **blocked by default**. Pass `allowFormulaOverwrite: true` only when intentionally replacing formulas with static values.
 </Warning>
 
 ---
 
 ## `write_range`
 
-Writes a 2D array of values to a specific range, overwriting existing cell content.
+Writes a 2D array of values to a specific range, overwriting existing content.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `spreadsheetId` | `string` | ✅ | — | Target spreadsheet |
-| `range` | `string` | ✅ | — | A1 notation, e.g. `Sheet1!B2:D5` |
-| `values` | `string[][]` | ✅ | — | 2D array of cell values |
+| `range` | `string` | ✅ | — | A1 notation, e.g. `Sheet1!A1` |
+| `values` | `any[][]` | ✅ | — | 2D array of cell values |
 | `valueInputOption` | `enum` | ❌ | `USER_ENTERED` | `RAW` or `USER_ENTERED` |
-| `allowFormulaOverwrite` | `boolean` | ❌ | `false` | Bypass formula protection |
+| `allowFormulaOverwrite` | `boolean` | ❌ | `false` | Bypass formula + ARRAYFORMULA spill protection |
 
 ### `valueInputOption`
 
 | Value | Behaviour |
 |---|---|
-| `USER_ENTERED` | Values are parsed like a human typed them — `=SUM(A1:A5)` becomes a formula, `$100` becomes currency |
-| `RAW` | Values are stored as-is — `=SUM(A1:A5)` becomes the literal string `=SUM(A1:A5)` |
+| `USER_ENTERED` | Values parsed as if typed by a human — `=SUM(A1:A5)` becomes a live formula, `$100` becomes currency |
+| `RAW` | Values stored literally — `=SUM(A1:A5)` is stored as the text string `=SUM(A1:A5)` |
 
-### Example
+### Pre-write snapshot
+
+Before writing, `write_range` fetches the current range values and saves them to `write_history`. This snapshot can be restored via `restore_snapshot`. Snapshot is skipped silently if the range exceeds 1,000 rows or 2 MB.
+
+### Response
 
 ```json
-{
-  "spreadsheetId": "1BxiMVs0XRA...",
-  "range": "Sheet1!A1:C2",
-  "values": [
-    ["Name", "Revenue", "Region"],
-    ["Acme", "12000", "South"]
-  ],
-  "valueInputOption": "USER_ENTERED"
-}
+{ "updatedCells": 12 }
+
+// With protection warnings (non-blocking):
+{ "updatedCells": 12, "_warnings": ["⚠️ Target range has a user-set protection warning."] }
+```
+
+### Cache invalidation
+
+After a successful write, the entire `sheet_snapshots` cache for the spreadsheet is cleared so subsequent `read_range` and `analyze_range` calls see fresh data.
+
+### Mid-operation protection conflict
+
+If a `403` or protection-related error occurs **during** (not before) the write — meaning the sheet's protection changed between the guard check and the actual API call — the error returned is:
+
+```
+Write failed — a protected range conflict was detected mid-operation.
+The sheet's protection settings may have changed.
+Call read_range to re-inspect the current schema before retrying.
 ```
 
 ---
@@ -51,71 +64,86 @@ Appends rows to the bottom of an existing data table without overwriting.
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `spreadsheetId` | `string` | ✅ | — | Target spreadsheet |
-| `range` | `string` | ✅ | — | A1 range that contains the table |
-| `values` | `string[][]` | ✅ | — | 2D array of rows to append |
+| `range` | `string` | ✅ | — | A1 range containing the table (e.g. `Sheet1!A1`) |
+| `values` | `any[][]` | ✅ | — | 2D array of rows to append |
 | `valueInputOption` | `enum` | ❌ | `USER_ENTERED` | `RAW` or `USER_ENTERED` |
 | `insertDataOption` | `enum` | ❌ | `INSERT_ROWS` | `INSERT_ROWS` or `OVERWRITE` |
+| `allowFormulaOverwrite` | `boolean` | ❌ | `false` | Bypass ARRAYFORMULA spill protection |
 
 <Tip>
-  Always prefer `insertDataOption: INSERT_ROWS` (the default). `OVERWRITE` will replace cells at the bottom of the table rather than inserting new rows below them.
+  Always use the default `INSERT_ROWS`. `OVERWRITE` replaces cells at the detected table bottom rather than inserting new rows — which can destroy existing data below the table.
 </Tip>
+
+<Note>
+  `append_rows` also has `allowFormulaOverwrite` because the append target might land in an ARRAYFORMULA spill zone. The guard is the same as `write_range`.
+</Note>
 
 ---
 
 ## `clear_range`
 
-Clears all **values** in a range while **preserving formatting**, data validation rules, and conditional formatting.
+Clears all **values** in a range while **preserving** formatting, data validation, and conditional formatting rules.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `spreadsheetId` | `string` | ✅ | Target spreadsheet |
-| `range` | `string` | ✅ | A1 range to clear |
+| `range` | `string` | ✅ | A1 range to clear, e.g. `Sheet1!A1:D10` |
 
 <Note>
-  `clear_range` only removes cell values. To remove formatting as well, use `batch_update_sheet` with a `repeatCell` request setting `fields: "userEnteredFormat"`.
+  `clear_range` only removes cell values. To also remove formatting, use `batch_update_sheet` with a `repeatCell` request and `fields: "userEnteredFormat"`.
 </Note>
 
 ---
 
 ## `format_cells`
 
-Applies visual formatting to a range using zero-based grid indexes (not A1 notation).
+Applies visual formatting to a cell range using **zero-based grid indexes** (not A1 notation).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `spreadsheetId` | `string` | ✅ | Target spreadsheet |
 | `sheetId` | `number` | ✅ | Numeric sheet ID (from `list_sheets`) |
-| `startRowIndex` | `number` | ✅ | Zero-based start row (inclusive) |
-| `endRowIndex` | `number` | ✅ | Zero-based end row (exclusive) |
-| `startColumnIndex` | `number` | ✅ | Zero-based start column (inclusive) |
-| `endColumnIndex` | `number` | ✅ | Zero-based end column (exclusive) |
-| `bold` | `boolean` | ❌ | Bold text |
-| `italic` | `boolean` | ❌ | Italic text |
-| `fontSize` | `number` | ❌ | Font size in points |
-| `backgroundColor` | `{ red, green, blue }` | ❌ | RGB decimals 0–1 |
+| `startRowIndex` | `number` | ✅ | Zero-based, inclusive |
+| `endRowIndex` | `number` | ✅ | Zero-based, exclusive |
+| `startColumnIndex` | `number` | ✅ | Zero-based, inclusive |
+| `endColumnIndex` | `number` | ✅ | Zero-based, exclusive |
+| `bold` | `boolean` | ❌ | — |
+| `italic` | `boolean` | ❌ | — |
+| `fontSize` | `number` | ❌ | Points |
 | `textColor` | `{ red, green, blue }` | ❌ | RGB decimals 0–1 |
-| `horizontalAlignment` | `string` | ❌ | `LEFT`, `CENTER`, `RIGHT` |
-| `wrapStrategy` | `string` | ❌ | `WRAP`, `OVERFLOW_CELL`, `CLIP` |
-| `numberFormat` | `{ type, pattern? }` | ❌ | Sheets number format |
+| `backgroundColor` | `{ red, green, blue }` | ❌ | RGB decimals 0–1 |
+| `horizontalAlignment` | `LEFT` \| `CENTER` \| `RIGHT` | ❌ | — |
+| `verticalAlignment` | `TOP` \| `MIDDLE` \| `BOTTOM` | ❌ | — |
+| `wrapStrategy` | `OVERFLOW_CELL` \| `LEGACY_WRAP` \| `CLIP` \| `WRAP` | ❌ | — |
+| `numberFormat` | `{ type, pattern }` | ❌ | Sheets number format type + pattern |
+
+### Index mapping
+
+Row 1 (header) = `startRowIndex: 0, endRowIndex: 1`. Column A = `startColumnIndex: 0`, Column B = `startColumnIndex: 1`.
 
 ### Color format
 
-Colors are **RGB decimals between 0 and 1**, not hex codes:
+Colors are **RGB decimals 0–1**, not hex:
 
 ```json
-// Green background
-"backgroundColor": { "red": 0.18, "green": 0.8, "blue": 0.44 }
-
-// Red text
-"textColor": { "red": 0.9, "green": 0.1, "blue": 0.1 }
+{ "red": 0.35, "green": 0.62, "blue": 0.56 }   // #5A9E8F
 ```
 
-### Row/column index mapping
+### `numberFormat` types
 
-Row 1 (the header row) = `startRowIndex: 0, endRowIndex: 1`. Column A = `startColumnIndex: 0`, Column B = `startColumnIndex: 1`.
+`TEXT`, `NUMBER`, `PERCENT`, `CURRENCY`, `DATE`, `TIME`, `DATE_TIME`, `SCIENTIFIC`
 
 ```json
-// Bold + green background on row 1 (header), columns A–D
+// Currency with 2 decimal places
+"numberFormat": { "type": "CURRENCY", "pattern": "$#,##0.00" }
+
+// Date
+"numberFormat": { "type": "DATE", "pattern": "yyyy-MM-dd" }
+```
+
+### Full example — bold green header row
+
+```json
 {
   "spreadsheetId": "...",
   "sheetId": 0,
@@ -124,6 +152,7 @@ Row 1 (the header row) = `startRowIndex: 0, endRowIndex: 1`. Column A = `startCo
   "startColumnIndex": 0,
   "endColumnIndex": 4,
   "bold": true,
-  "backgroundColor": { "red": 0.18, "green": 0.8, "blue": 0.44 }
+  "backgroundColor": { "red": 0.35, "green": 0.62, "blue": 0.56 },
+  "textColor": { "red": 1, "green": 1, "blue": 1 }
 }
 ```
