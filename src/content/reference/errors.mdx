@@ -75,7 +75,7 @@ to refresh your connection.
 
 **Exact message pattern (from `formulaOverwriteBlockedMessage()`):**
 ```
-<toolName> blocked because the target range contains formula cells (<N>): <cell list>.
+<toolName> blocked because the target range contains formula cells (): <cell list>.
 Pass allowFormulaOverwrite: true only if you intend to replace formulas with static values.
 ```
 
@@ -96,7 +96,7 @@ Pass allowFormulaOverwrite: true only if you intend to replace formulas with sta
 **Exact message pattern (from `arrayFormulaSpillBlockedMessage()`):**
 ```
 ARRAYFORMULA spill blocked. Formula cell(s): <cell list>.
-Potential spill would overwrite occupied cells (<N>): <cell list>.
+Potential spill would overwrite occupied cells (): <cell list>.
 Clear those cells, insert buffer columns, narrow the formula output,
 or pass allowFormulaOverwrite: true if this overwrite is intentional.
 ```
@@ -163,7 +163,7 @@ Call read_range to re-inspect the current schema before retrying.
 ### `transform_range` cell limit
 
 ```
-Too many cells (<N>). Maximum is 50,000 per transform call.
+Too many cells (). Maximum is 50,000 per transform call.
 ```
 
 **Cause:** `rows × columns` in the range exceeds 50,000 cells.
@@ -203,7 +203,7 @@ sheetId is required for action=delete
 
 **Exact message pattern:**
 ```
-Delete blocked: sheet "<title>" contains <N> rows of data.
+Delete blocked: sheet "<title>" contains  rows of data.
 Pass confirmDelete: true to permanently delete this sheet. THIS CANNOT BE UNDONE.
 ```
 
@@ -271,7 +271,7 @@ These originate from the Sheets API v4 and are returned as-is in the `error` fie
 | `Requested entity was not found` | Invalid `spreadsheetId` or tab deleted |
 | `Unable to parse range` | Malformed A1 notation — check sheet name and cell refs |
 | `Quota exceeded` | 60 requests/min/user exceeded |
-| `No grid with id: <N>` | `sheetId` number no longer exists |
+| `No grid with id: ` | `sheetId` number no longer exists |
 
 > **💡 Tip**
 >
