@@ -1,0 +1,6 @@
+export default {
+  'connect-claude': 'Connect Claude Desktop',
+  'connect-cursor': 'Connect Cursor',
+  'sql-in-sheets': 'SQL in Sheets',
+  'self-deploy': 'Self-Deploy',
+}
