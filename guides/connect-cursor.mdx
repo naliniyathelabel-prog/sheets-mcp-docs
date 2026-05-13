@@ -1,12 +1,12 @@
 ---
 title: "Connect Cursor"
-description: "Add sheets-mcp to Cursor IDE using the MCP settings panel."
+description: "Add sheets-mcp to Cursor IDE using the MCP settings panel or mcp.json."
 ---
 
 ## Prerequisites
 
 - [Cursor](https://cursor.sh) IDE installed (v0.43 or later recommended)
-- A sheets-mcp account at [sheets-mcp.vercel.app](https://sheets-mcp.vercel.app)
+- A sheets-mcp account at [sheets-mcp-xi.vercel.app](https://sheets-mcp-xi.vercel.app)
 
 ---
 
@@ -16,25 +16,25 @@ description: "Add sheets-mcp to Cursor IDE using the MCP settings panel."
 
     Go to **Cursor → Settings → Features → MCP Servers**.
 
-    Alternatively, open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search for **MCP: Add Server**.
+    Or open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search **MCP: Add Server**.
 
   </Step>
 
   <Step title="Add a new MCP server">
 
-    Click **Add new MCP server** and fill in:
+    Click **Add new MCP server** and enter:
 
     - **Name:** `sheets-mcp`
-    - **URL:** `https://sheets-mcp.vercel.app/api/mcp`
-    - **Transport:** Auto (Cursor will negotiate SSE or HTTP)
+    - **URL:** `https://sheets-mcp-xi.vercel.app/api/mcp`
+    - **Transport:** Auto (Cursor negotiates SSE or HTTP automatically)
 
-    Or add it directly to your `~/.cursor/mcp.json`:
+    Or edit `~/.cursor/mcp.json` directly:
 
     ```json
     {
       "mcpServers": {
         "sheets-mcp": {
-          "url": "https://sheets-mcp.vercel.app/api/mcp"
+          "url": "https://sheets-mcp-xi.vercel.app/api/mcp"
         }
       }
     }
@@ -44,23 +44,25 @@ description: "Add sheets-mcp to Cursor IDE using the MCP settings panel."
 
   <Step title="Reload Cursor">
 
-    Press `Cmd+Shift+P` → **Developer: Reload Window** to apply the config.
+    `Cmd+Shift+P` → **Developer: Reload Window** to apply the config.
 
   </Step>
 
   <Step title="Authorize via Google OAuth">
 
-    The first time Cursor calls a sheets-mcp tool, it will open the OIDC authorize URL in your browser. Complete the Google sign-in and grant Sheets + Drive scopes.
+    The first time Cursor calls a sheets-mcp tool, it opens the OIDC authorize URL in your browser. Sign in and grant Sheets + Drive scopes.
+
+    Once authorized, the session is stored in Supabase and reused on all subsequent calls — no repeated consent.
 
   </Step>
 
   <Step title="Test in Cursor Chat">
 
-    Open a Cursor Chat window (Cmd+L) and type:
+    Open a Cursor Chat window (`Cmd+L`) and type:
 
     > "Use sheets-mcp to list my Google spreadsheets"
 
-    Cursor's agent will invoke `list_spreadsheets` and display the results inline.
+    Cursor's agent calls `list_spreadsheets` and displays results inline.
 
   </Step>
 
@@ -68,18 +70,17 @@ description: "Add sheets-mcp to Cursor IDE using the MCP settings panel."
 
 ---
 
-## Using an API key instead of OIDC
+## Using an API key (headless / CI)
 
-If you prefer API key auth (useful for Cursor agent pipelines that run headlessly):
+Generate an API key from [sheets-mcp-xi.vercel.app/dashboard](https://sheets-mcp-xi.vercel.app/dashboard).
 
-1. Generate an API key from [sheets-mcp.vercel.app/dashboard](https://sheets-mcp.vercel.app/dashboard)
-2. Add it to your Cursor MCP config:
+The key is shown **once** — copy it immediately.
 
 ```json
 {
   "mcpServers": {
     "sheets-mcp": {
-      "url": "https://sheets-mcp.vercel.app/api/mcp",
+      "url": "https://sheets-mcp-xi.vercel.app/api/mcp",
       "headers": {
         "x-api-key": "YOUR_API_KEY"
       }
@@ -88,7 +89,7 @@ If you prefer API key auth (useful for Cursor agent pipelines that run headlessl
 }
 ```
 
-See [Authentication](/authentication#path-2--api-key-x-api-key) for full API key details.
+API keys have no expiry by default and resolve to the same Google OAuth session as OIDC. See [Authentication](/authentication) for full details.
 
 ---
 
@@ -98,4 +99,5 @@ See [Authentication](/authentication#path-2--api-key-x-api-key) for full API key
 |---|---|
 | Server shows as "disconnected" | Check the URL has no trailing slash. Reload the Cursor window. |
 | OAuth window does not open | Cursor uses the system browser. Ensure your default browser is set. |
-| Tools visible but returning errors | Open Cursor DevTools (`Help → Toggle Developer Tools`) and check the MCP panel for error messages. |
+| Tools visible but returning errors | Open Cursor DevTools (`Help → Toggle Developer Tools`) and check the MCP panel. |
+| `needsAuth: true` in response | Refresh token revoked. Sign out from dashboard and re-authorize. |
