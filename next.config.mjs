@@ -1,10 +1,10 @@
-import nextra from 'nextra'
+import { createMDX } from 'fumadocs-mdx/next';
 
-const withNextra = nextra({
-  search: { codeblocks: false }
-})
+const withMDX = createMDX();
 
-export default withNextra({
+/** @type {import('next').NextConfig} */
+const config = {
   reactStrictMode: true,
-  images: { unoptimized: true },
-})
+};
+
+export default withMDX(config);
