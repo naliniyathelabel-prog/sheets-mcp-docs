@@ -1,0 +1,69 @@
+---
+title: "Tools Overview"
+description: "All 15 MCP tools, design principles, and the 2026 MCP spec features used."
+---
+
+## Design principles
+
+sheets-mcp's tool surface was designed against three constraints:
+
+1. **Context window budget** — Every tool schema token costs inference budget. The full schema payload was optimised from ~760 tokens down to ~450 tokens (41% reduction) by trimming redundant descriptions and `z.describe` attributes on self-evident fields.
+2. **Sheets API cost** — The Sheets API charges per HTTP request. Tools prefer batch operations (`batch_update_sheet`, `append_rows` with `INSERT_ROWS`) over sequential single-cell writes.
+3. **Agent ergonomics** — Tool names and parameter names follow the principle of least surprise. Overlapping operations are merged (e.g. `delete_sheet` + `add_sheet` + `rename_sheet` → `manage_sheets`).
+
+### 2026 MCP spec features used
+
+| Feature | How sheets-mcp uses it |
+|---|---|
+| **Tool Output Schemas** (June 2025 spec) | Every tool declares its return shape to reduce context waste |
+| **Structured errors** | All errors return `{ code, message, details }` — never raw stack traces |
+| **Batch-first** | `batch_update_sheet` covers the full `batchUpdate` surface in one round-trip |
+| **Data-in-place operations** | `analyze_range` and `transform_range` run SQL inside Postgres — sheet data never enters the agent context |
+
+---
+
+## All 15 tools
+
+| # | Tool | Category | Description |
+|---|---|---|---|
+| 1 | [`list_spreadsheets`](/tools/read#list_spreadsheets) | Read | List all spreadsheets in Drive |
+| 2 | [`list_sheets`](/tools/read#list_sheets) | Read | List tabs inside a spreadsheet |
+| 3 | [`read_range`](/tools/read#read_range) | Read | Read a 2D cell range |
+| 4 | [`write_range`](/tools/write#write_range) | Write | Overwrite a specific range |
+| 5 | [`append_rows`](/tools/write#append_rows) | Write | Append rows to the bottom of a table |
+| 6 | [`clear_range`](/tools/write#clear_range) | Write | Clear values, keep formatting |
+| 7 | [`format_cells`](/tools/write#format_cells) | Write | Apply visual formatting |
+| 8 | [`analyze_range`](/tools/analyze#analyze_range) | Analyze | Read-only SQL on sheet data |
+| 9 | [`transform_range`](/tools/analyze#transform_range) | Analyze | SQL → write results back to sheet |
+| 10 | [`create_spreadsheet`](/tools/manage#create_spreadsheet) | Manage | Create a new spreadsheet |
+| 11 | [`manage_sheets`](/tools/manage#manage_sheets) | Manage | Add / rename / delete tabs |
+| 12 | [`copy_sheet`](/tools/manage#copy_sheet) | Manage | Copy a tab to another spreadsheet |
+| 13 | [`batch_update_sheet`](/tools/manage#batch_update_sheet) | Manage | Raw batchUpdate passthrough |
+| 14 | [`restore_snapshot`](/tools/manage#restore_snapshot) | Manage | Restore cached sheet snapshot |
+| 15 | [`manage_drive`](/tools/drive#manage_drive) | Drive | Search files and convert to Sheets |
+
+---
+
+## Rate limits
+
+The underlying Google Sheets API enforces **60 read/write requests per minute per user**. sheets-mcp does not add its own rate limit layer on top of this (scheduled for a future release). If you exceed the Google quota, tools return a structured `429` error with a retry hint.
+
+---
+
+## Error format
+
+All tool errors follow a consistent shape:
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{ \"code\": \"PERMISSION_DENIED\", \"message\": \"The caller does not have permission\", \"details\": {} }"
+    }
+  ],
+  "isError": true
+}
+```
+
+See the [Error Reference](/reference/errors) for the full list of error codes.
