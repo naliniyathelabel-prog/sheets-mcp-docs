@@ -1,0 +1,129 @@
+---
+title: "Write Tools"
+description: "write_range, append_rows, clear_range, format_cells — modify sheet data and formatting."
+---
+
+<Warning>
+  All write tools run [safety checks](/concepts/safety) before executing. Writes that would destroy formula cells or overlap Protected Ranges are blocked by default. Pass `allowFormulaOverwrite: true` only when intentionally replacing formulas with static values.
+</Warning>
+
+---
+
+## `write_range`
+
+Writes a 2D array of values to a specific range, overwriting existing cell content.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | — | Target spreadsheet |
+| `range` | `string` | ✅ | — | A1 notation, e.g. `Sheet1!B2:D5` |
+| `values` | `string[][]` | ✅ | — | 2D array of cell values |
+| `valueInputOption` | `enum` | ❌ | `USER_ENTERED` | `RAW` or `USER_ENTERED` |
+| `allowFormulaOverwrite` | `boolean` | ❌ | `false` | Bypass formula protection |
+
+### `valueInputOption`
+
+| Value | Behaviour |
+|---|---|
+| `USER_ENTERED` | Values are parsed like a human typed them — `=SUM(A1:A5)` becomes a formula, `$100` becomes currency |
+| `RAW` | Values are stored as-is — `=SUM(A1:A5)` becomes the literal string `=SUM(A1:A5)` |
+
+### Example
+
+```json
+{
+  "spreadsheetId": "1BxiMVs0XRA...",
+  "range": "Sheet1!A1:C2",
+  "values": [
+    ["Name", "Revenue", "Region"],
+    ["Acme", "12000", "South"]
+  ],
+  "valueInputOption": "USER_ENTERED"
+}
+```
+
+---
+
+## `append_rows`
+
+Appends rows to the bottom of an existing data table without overwriting.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | — | Target spreadsheet |
+| `range` | `string` | ✅ | — | A1 range that contains the table |
+| `values` | `string[][]` | ✅ | — | 2D array of rows to append |
+| `valueInputOption` | `enum` | ❌ | `USER_ENTERED` | `RAW` or `USER_ENTERED` |
+| `insertDataOption` | `enum` | ❌ | `INSERT_ROWS` | `INSERT_ROWS` or `OVERWRITE` |
+
+<Tip>
+  Always prefer `insertDataOption: INSERT_ROWS` (the default). `OVERWRITE` will replace cells at the bottom of the table rather than inserting new rows below them.
+</Tip>
+
+---
+
+## `clear_range`
+
+Clears all **values** in a range while **preserving formatting**, data validation rules, and conditional formatting.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
+| `range` | `string` | ✅ | A1 range to clear |
+
+<Note>
+  `clear_range` only removes cell values. To remove formatting as well, use `batch_update_sheet` with a `repeatCell` request setting `fields: "userEnteredFormat"`.
+</Note>
+
+---
+
+## `format_cells`
+
+Applies visual formatting to a range using zero-based grid indexes (not A1 notation).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
+| `sheetId` | `number` | ✅ | Numeric sheet ID (from `list_sheets`) |
+| `startRowIndex` | `number` | ✅ | Zero-based start row (inclusive) |
+| `endRowIndex` | `number` | ✅ | Zero-based end row (exclusive) |
+| `startColumnIndex` | `number` | ✅ | Zero-based start column (inclusive) |
+| `endColumnIndex` | `number` | ✅ | Zero-based end column (exclusive) |
+| `bold` | `boolean` | ❌ | Bold text |
+| `italic` | `boolean` | ❌ | Italic text |
+| `fontSize` | `number` | ❌ | Font size in points |
+| `backgroundColor` | `{ red, green, blue }` | ❌ | RGB decimals 0–1 |
+| `textColor` | `{ red, green, blue }` | ❌ | RGB decimals 0–1 |
+| `horizontalAlignment` | `string` | ❌ | `LEFT`, `CENTER`, `RIGHT` |
+| `wrapStrategy` | `string` | ❌ | `WRAP`, `OVERFLOW_CELL`, `CLIP` |
+| `numberFormat` | `{ type, pattern? }` | ❌ | Sheets number format |
+
+### Color format
+
+Colors are **RGB decimals between 0 and 1**, not hex codes:
+
+```json
+// Green background
+"backgroundColor": { "red": 0.18, "green": 0.8, "blue": 0.44 }
+
+// Red text
+"textColor": { "red": 0.9, "green": 0.1, "blue": 0.1 }
+```
+
+### Row/column index mapping
+
+Row 1 (the header row) = `startRowIndex: 0, endRowIndex: 1`. Column A = `startColumnIndex: 0`, Column B = `startColumnIndex: 1`.
+
+```json
+// Bold + green background on row 1 (header), columns A–D
+{
+  "spreadsheetId": "...",
+  "sheetId": 0,
+  "startRowIndex": 0,
+  "endRowIndex": 1,
+  "startColumnIndex": 0,
+  "endColumnIndex": 4,
+  "bold": true,
+  "backgroundColor": { "red": 0.18, "green": 0.8, "blue": 0.44 }
+}
+```
