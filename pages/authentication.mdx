@@ -1,0 +1,145 @@
+---
+title: "Authentication"
+description: "Two auth paths: OIDC for interactive clients, API key for headless scripts and CI."
+---
+
+sheets-mcp has two parallel auth paths. Both resolve to the same Google OAuth session internally — your token is fetched from Supabase and auto-refreshed on every tool call regardless of which path you used to connect.
+
+---
+
+## Auth paths at a glance
+
+| | OIDC (OAuth2 + JWT) | API Key (`x-api-key`) |
+|---|---|---|
+| **Best for** | Claude Desktop, Cursor, interactive MCP clients | Scripts, CI pipelines, custom agents |
+| **How it works** | Client initiates OAuth handshake → Google consent → JWT issued | Generate key from dashboard → pass as header |
+| **Session storage** | Supabase `account` + `session` tables via `better-auth` | Supabase `apikey` table |
+| **Token refresh** | Automatic (proactive refresh if expiring within 5 min) | Same — resolves to same session |
+| **Rate limiting** | Disabled (by design, pre-launch) | Disabled (by design, pre-launch) |
+
+---
+
+## Path 1 — OIDC (Claude Desktop / Cursor)
+
+sheets-mcp acts as a full **OIDC provider** using `better-auth`'s `mcp()` plugin. Clients that speak standard OAuth2 + JWT (Claude Desktop, Cursor, any MCP client implementing the 2025 auth spec) work out of the box.
+
+### OIDC discovery endpoints
+
+The `proxy.ts` middleware serves standard OAuth metadata at:
+
+```
+GET /.well-known/oauth-authorization-server
+GET /.well-known/openid-configuration
+GET /.well-known/oauth-protected-resource
+GET /api/auth/.well-known/openid-configuration
+```
+
+MCP clients hit these endpoints automatically during the initial handshake — no manual configuration needed.
+
+### Flow
+
+```
+MCP Client (Claude / Cursor)
+    │
+    ├─ GET /.well-known/oauth-authorization-server  → discovers endpoints
+    ├─ Redirects browser to /authorize (consent page)
+    ├─ User signs in via Google OAuth or email+password
+    ├─ User clicks "Allow" on the consent screen
+    ├─ better-auth issues JWT → client stores it
+    └─ All subsequent MCP calls use: Authorization: Bearer <JWT>
+```
+
+### Consent page
+
+`/authorize` shows the requesting client name (e.g. "Claude" or "An AI Assistant") and the user's current Google account email. The user can allow, deny, or switch accounts without leaving the flow.
+
+> **Note**
+>
+> **Session persistence.** Once consented, `better-auth` stores the session and Google OAuth token in Supabase. Reconnecting (e.g. restarting Claude Desktop) reuses the stored session with no re-consent — unless the Google refresh token was revoked.
+
+
+> **⚠️ Warning**
+>
+> **Account switching.** sheets-mcp uses `prompt: "select_account consent"` on Google OAuth. This forces the account picker every time, so users can always switch accounts by signing out from the dashboard first.
+
+
+---
+
+## Path 2 — API Key (`x-api-key`)
+
+Generate an API key from your dashboard at `https://sheets-mcp-xi.vercel.app/dashboard`. The key is shown **once** — copy it immediately.
+
+```bash
+curl https://sheets-mcp-xi.vercel.app/api/mcp \
+  -H "x-api-key: YOUR_KEY_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"tools/list"}'
+```
+
+For MCP clients that support custom headers:
+
+```json
+{
+  "mcpServers": {
+    "sheets-mcp": {
+      "url": "https://sheets-mcp-xi.vercel.app/api/mcp",
+      "headers": {
+        "x-api-key": "YOUR_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+API keys are managed by `better-auth`'s `apiKey` plugin with `enableSessionForAPIKeys: true` — they resolve to the same user context as OIDC, including the same Google OAuth token.
+
+> **💡 Tip**
+>
+> API keys have no built-in expiry unless you set one during creation. Name your keys clearly (e.g. "CI pipeline", "Cursor headless") so you can revoke individual keys without affecting others.
+
+
+---
+
+## Google OAuth scopes
+
+Sourced directly from `auth.ts`:
+
+| Scope | Purpose |
+|---|---|
+| `openid`, `email`, `profile` | Basic identity |
+| `https://www.googleapis.com/auth/spreadsheets` | Full Sheets read/write |
+| `https://www.googleapis.com/auth/drive.readonly` | List spreadsheets in Drive |
+| `https://www.googleapis.com/auth/drive.file` | Create and convert files |
+
+> **Note**
+>
+> sheets-mcp requests `drive.readonly` (list) + `drive.file` (create/convert) — **not** full Drive access. It cannot read arbitrary Drive files that weren't created by or opened through the app.
+
+
+---
+
+## Token lifecycle
+
+| Event | Behaviour |
+|---|---|
+| First login | Full Google consent screen, all scopes requested |
+| Reconnect (same account) | Session reused from Supabase — no consent |
+| Access token within 5 min of expiry | `mcp-google.ts` proactively refreshes and persists fresh token |
+| Refresh token revoked (user in Google settings) | Next call returns `{ error: "...", needsAuth: true }` — user must re-authorize |
+| Account switch needed | Sign out from dashboard → reconnect |
+
+---
+
+## Email + password auth
+
+Besides Google OAuth, sheets-mcp also supports **email + password** signup/login (via `better-auth`'s `emailAndPassword` plugin). However, email auth does not grant Google Sheets access — you must also connect a Google account from the dashboard after signing in.
+
+---
+
+## Login + authorize pages
+
+| Route | Purpose |
+|---|---|
+| `/login` | Sign in with Google or email+password. Redirects to `/dashboard` or back to the MCP `returnTo` param |
+| `/authorize` | OIDC consent screen. Shows client name, user email, Allow/Deny buttons |
+| `/dashboard` | Manage API keys, view Google connection status, sign out |
