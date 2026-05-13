@@ -1,69 +1,83 @@
 # sheets-mcp Docs
 
-Documentation site for [sheets-mcp](https://sheets-mcp-xi.vercel.app) — the MCP server for Google Sheets.
+Documentation for [sheets-mcp](https://sheets-mcp-xi.vercel.app) — the MCP server for Google Sheets.
 
-Built with [Mintlify](https://mintlify.com). Deployed to [Cloudflare Pages](https://pages.cloudflare.com).
+**Stack:** Next.js 15 + Nextra 4 + nextra-theme-docs. Deploys to Vercel with zero config.
 
-## Local preview
+---
 
-```bash
-npm install -g mintlify
-mintlify dev
-```
+## Deploy to Vercel (30 seconds)
 
-Opens at `http://localhost:3000`.
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/naliniyathelabel-prog/sheets-mcp-docs)
 
-## Deployment
+Or manually:
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Import `naliniyathelabel-prog/sheets-mcp-docs`
+3. Click **Deploy** — Vercel auto-detects Next.js, no config needed
 
-### Cloudflare Pages (production)
+Your docs go live at `https://sheets-mcp-docs.vercel.app` instantly.
 
-Automatically deployed on every push to `main` via GitHub Actions.
+---
 
-**Required GitHub repository secrets:**
-
-| Secret | Where to get it |
-|---|---|
-| `CF_API_TOKEN` | Cloudflare Dashboard → My Profile → API Tokens → Create Token (use "Edit Cloudflare Workers" template) |
-| `CF_ACCOUNT_ID` | Cloudflare Dashboard → Workers & Pages → Account ID (right sidebar) |
-
-### Manual deploy
+## Local dev
 
 ```bash
-npm install -g mintlify wrangler
-mintlify build
-wrangler pages deploy .mintlify/dist --project-name=sheets-mcp-docs
+git clone https://github.com/naliniyathelabel-prog/sheets-mcp-docs
+cd sheets-mcp-docs
+npm install
+npm run dev
+# → http://localhost:3000
 ```
+
+Tunnel for sharing:
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+
+---
+
+## Build
+
+```bash
+npm run build   # next build → static export to out/
+```
+
+---
 
 ## Structure
 
 ```
-mint.json                    # Mintlify config — navigation, colors, branding
-index.mdx                    # Landing page
-quickstart.mdx               # 5-step setup
-authentication.mdx           # OIDC + API key
-concepts/
-  architecture.mdx           # System architecture
-  safety.mdx                 # Write safety layers
-  database.mdx               # Full DB schema
-tools/
-  overview.mdx               # 14 tools + AX guide
-  read.mdx                   # list_spreadsheets, list_sheets, read_range
-  write.mdx                  # write_range, append_rows, clear_range, format_cells
-  analyze.mdx                # analyze_range, transform_range (SQL engine)
-  manage.mdx                 # create_spreadsheet, manage_sheets, copy_sheet, batch_update_sheet, restore_snapshot
-  drive.mdx                  # manage_drive
-guides/
-  connect-claude.mdx         # Claude Desktop setup
-  connect-cursor.mdx         # Cursor IDE setup
-  sql-in-sheets.mdx          # SQL cookbook
-  self-deploy.mdx            # Self-host on Vercel
-reference/
-  errors.mdx                 # All typed errors with exact message text
-  glossary.mdx               # Key terms — AX-first
-  roadmap.mdx                # Known issues + planned work
-changelog.mdx                # v1.0.0 → v1.1.0
+pages/
+  _meta.json              # Root sidebar nav
+  index.mdx               # Landing
+  quickstart.mdx
+  authentication.mdx
+  changelog.mdx
+  concepts/
+    _meta.json
+    architecture.mdx
+    safety.mdx
+    database.mdx
+  tools/
+    _meta.json
+    overview.mdx
+    read.mdx  write.mdx  analyze.mdx  manage.mdx  drive.mdx
+  guides/
+    _meta.json
+    connect-claude.mdx  connect-cursor.mdx
+    sql-in-sheets.mdx   self-deploy.mdx
+  reference/
+    _meta.json
+    errors.mdx  glossary.mdx  roadmap.mdx
+
+theme.config.jsx          # Nextra theme — colors, navbar, footer
+next.config.mjs           # Nextra plugin config
+package.json              # Next.js 15 + Nextra 4
+vercel.json               # Vercel deploy config
 ```
+
+---
 
 ## Source of truth
 
-All content is derived from the sheets-mcp source code — `route.ts`, `sheets-safety.ts`, `mcp-google.ts`, `auth.ts`, `db.ts`, and the SQL migration scripts. The reference docs in the original zip were used as a secondary reference only. If anything conflicts, the source code wins.
+All content sourced from `route.ts`, `sheets-safety.ts`, `mcp-google.ts`, `auth.ts`, `db.ts`, and SQL migration scripts. Reference docs used as secondary reference only — source code wins on conflicts.
