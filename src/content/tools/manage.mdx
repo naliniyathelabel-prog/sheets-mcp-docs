@@ -9,7 +9,7 @@ Creates a new blank spreadsheet and returns its ID and URL.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `title` | `string` | ✅ | Name of the new spreadsheet |
+| `title` | `string` | ✓ | Name of the new spreadsheet |
 
 ```json
 // Response
@@ -24,11 +24,11 @@ Add, rename, or delete tabs inside a spreadsheet using the Sheets REST API. No A
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
-| `action` | `enum` | ✅ | `add` = create new tab, `rename` = change tab title, `delete` = remove tab |
-| `sheetId` | `number` | ❌ | Required for `rename` and `delete`. Get from `list_sheets`. |
-| `title` | `string` | ❌ | Required for `add` and `rename`. |
-| `confirmDelete` | `boolean` | ❌ | **Required to be `true` when deleting a non-empty sheet.** |
+| `spreadsheetId` | `string` | ✓ | Target spreadsheet |
+| `action` | `enum` | ✓ | `add` = create new tab, `rename` = change tab title, `delete` = remove tab |
+| `sheetId` | `number` | ✗ | Required for `rename` and `delete`. Get from `list_sheets`. |
+| `title` | `string` | ✗ | Required for `add` and `rename`. |
+| `confirmDelete` | `boolean` | ✗ | **Required to be `true` when deleting a non-empty sheet.** |
 
 ### The `confirmDelete` guard
 
@@ -56,9 +56,7 @@ A `_warnings` field is always returned on successful renames:
 }
 ```
 
-> **⚠️ Warning**
->
-> Renaming a sheet via the API **does not** update cross-sheet formula references like `=OldName!A1`. Those formulas break silently. Google Sheets only auto-fixes references during in-app UI renames.
+**Warning:** Renaming a sheet via the API **does not** update cross-sheet formula references like `=OldName!A1`. Those formulas break silently. Google Sheets only auto-fixes references during in-app UI renames.
 
 
 ### Cache invalidation
@@ -86,16 +84,16 @@ Copies an existing tab to another spreadsheet using `spreadsheets.sheets.copyTo`
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `spreadsheetId` | `string` | ✅ | Source spreadsheet |
-| `sheetId` | `number` | ✅ | Numeric sheet ID (from `list_sheets`) |
-| `destinationSpreadsheetId` | `string` | ✅ | Target spreadsheet |
+| `spreadsheetId` | `string` | ✓ | Source spreadsheet |
+| `sheetId` | `number` | ✓ | Numeric sheet ID (from `list_sheets`) |
+| `destinationSpreadsheetId` | `string` | ✓ | Target spreadsheet |
 
 ```json
 // Response — returns the new sheet's ID in the destination spreadsheet
 { "sheetId": 912345678 }
 ```
 
-> **💡 Tip**
+**Tip:**
 >
 > Typical template workflow: `create_spreadsheet` → `copy_sheet` (template tab) → `write_range` (populate data) → `format_cells` (apply branding).
 
@@ -108,8 +106,8 @@ Raw passthrough for the Google Sheets `batchUpdate` API. Use for everything not 
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
-| `requests` | `object[]` | ✅ | Array of raw `batchUpdate` request objects |
+| `spreadsheetId` | `string` | ✓ | Target spreadsheet |
+| `requests` | `object[]` | ✓ | Array of raw `batchUpdate` request objects |
 
 ### Example — auto-resize all columns
 
@@ -147,9 +145,9 @@ Lists or restores pre-write snapshots from the `write_history` table. Every succ
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
-| `action` | `enum` | ✅ | `list` = show available snapshots, `restore` = write a snapshot back |
-| `snapshotId` | `string` (UUID) | ❌ | Required for `restore`. Get the UUID from `list`. |
+| `spreadsheetId` | `string` | ✓ | Target spreadsheet |
+| `action` | `enum` | ✓ | `list` = show available snapshots, `restore` = write a snapshot back |
+| `snapshotId` | `string` (UUID) | ✗ | Required for `restore`. Get the UUID from `list`. |
 
 ### `action: "list"`
 
@@ -185,7 +183,5 @@ Writes the `before_values` back to `range_key` using `valueInputOption: RAW`. Ru
      → range is written back to its previous state
 ```
 
-> **⚠️ Warning**
->
-> Snapshots are only saved when the pre-write range is ≤ 1,000 rows and ≤ 2 MB. For large ranges, the snapshot is skipped silently. Check `rows` in the list output — if 0, no snapshot was taken.
+**Warning:** Snapshots are only saved when the pre-write range is ≤ 1,000 rows and ≤ 2 MB. For large ranges, the snapshot is skipped silently. Check `rows` in the list output — if 0, no snapshot was taken.
 
