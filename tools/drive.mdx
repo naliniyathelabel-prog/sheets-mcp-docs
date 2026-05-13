@@ -1,84 +1,102 @@
 ---
 title: "Drive Tools"
-description: "manage_drive — search Google Drive and convert files to native Sheets."
+description: "manage_drive — search your Drive and convert files to native Google Spreadsheets."
 ---
 
 ## `manage_drive`
 
-Handles Google Drive operations that are adjacent to spreadsheet work: finding files by name or query, and converting Drive files (such as CSVs uploaded by the user) into native Google Spreadsheets.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `action` | `enum` | ✅ | `search` or `convert_to_spreadsheet` |
-| `query` | `string` | ❌ | Drive search query (required for `search`) |
-| `fileId` | `string` | ❌ | Drive file ID (required for `convert_to_spreadsheet`) |
-| `filename` | `string` | ❌ | Optional name for the converted spreadsheet |
+Two actions: `search` and `convert_to_spreadsheet`.
 
 ---
 
-## Action: `search`
+## `action: "search"`
 
-Searches the user's Drive for files matching a query string. Uses the Drive API `files.list` endpoint with the provided query.
+Searches Google Drive for files matching a query. Automatically excludes trashed files (`and trashed=false` is always appended).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `action` | `"search"` | ✅ | — |
+| `query` | `string` | ✅ for search | Drive search query string |
+
+Returns up to **20 files** per call (hardcoded `pageSize: 20`).
+
+### Response
 
 ```json
 {
-  "action": "search",
-  "query": "name contains 'Budget' and mimeType='text/csv'"
+  "files": [
+    {
+      "id": "1a2B3cD4eF5g",
+      "name": "sales_q2.csv",
+      "mimeType": "text/csv",
+      "webViewLink": "https://drive.google.com/file/d/...",
+      "createdTime": "2026-04-01T10:00:00.000Z"
+    }
+  ]
 }
-```
-
-```json
-// Response
-[
-  {
-    "id": "1abc123XYZ",
-    "name": "Budget_Q2_2026.csv",
-    "mimeType": "text/csv",
-    "createdTime": "2026-04-15T10:00:00.000Z"
-  }
-]
 ```
 
 ### Drive query syntax
 
-Drive queries use Google's [query string format](https://developers.google.com/drive/api/guides/search-files). Common patterns:
+The `query` field uses the [Drive Files API query syntax](https://developers.google.com/drive/api/guides/search-files):
 
-| Query | Finds |
+| Goal | Query |
 |---|---|
-| `name contains 'report'` | Files with "report" in the name |
-| `mimeType='text/csv'` | CSV files only |
-| `modifiedTime > '2026-01-01'` | Files modified after Jan 1 2026 |
-| `trashed = false` | Exclude deleted files |
+| Find by name | `name contains 'report.csv'` |
+| Find by exact name | `name = 'Q2 Sales.xlsx'` |
+| Find only spreadsheets | `mimeType = 'application/vnd.google-apps.spreadsheet'` |
+| Find CSVs | `mimeType = 'text/csv'` |
+| Name contains AND type | `name contains 'sales' and mimeType = 'text/csv'` |
+
+<Note>
+  `and trashed=false` is always appended to every query automatically. You do not need to add it.
+</Note>
 
 ---
 
-## Action: `convert_to_spreadsheet`
+## `action: "convert_to_spreadsheet"`
 
-Converts a Drive file (typically a CSV or Excel file the user has uploaded) into a native Google Spreadsheet. This is required before you can use Sheets API tools on uploaded files — the Sheets API only works on native `application/vnd.google-apps.spreadsheet` files.
+Converts a Drive file (CSV, TSV, XLSX, ODS) to a native Google Spreadsheet using the Drive API's server-side conversion (`files.copy` with `mimeType: application/vnd.google-apps.spreadsheet`). No client-side parsing.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `action` | `"convert_to_spreadsheet"` | ✅ | — |
+| `fileId` | `string` | ✅ | Drive file ID from `search` |
+| `filename` | `string` | ❌ | New name for the converted spreadsheet |
+
+### Response
 
 ```json
-{
-  "action": "convert_to_spreadsheet",
-  "fileId": "1abc123XYZ",
-  "filename": "Budget Q2 2026"
-}
-```
-
-```json
-// Response
 {
   "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
-  "url": "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA..."
+  "name": "sales_q2",
+  "url": "https://docs.google.com/spreadsheets/d/.../edit",
+  "hint": "Use this spreadsheetId with list_sheets, analyze_range, or transform_range."
 }
 ```
 
-### Common workflow
+The `hint` field is literal text from the server response — it tells agents what to do next without needing to reason about it.
 
-1. User uploads a CSV to Drive
-2. Agent calls `manage_drive` with `action: search` to find the file ID
-3. Agent calls `manage_drive` with `action: convert_to_spreadsheet` to get a real Sheets ID
-4. Agent now uses `read_range`, `write_range`, `analyze_range` on the converted spreadsheet
+### End-to-end CSV workflow
 
-<Note>
-  Converting a file creates a **new** Google Spreadsheet — it does not modify the original file. Both the original and the converted spreadsheet will exist in Drive after conversion.
-</Note>
+```
+1. manage_drive(action: "search", query: "name contains 'sales_q2.csv'")
+   → get fileId
+
+2. manage_drive(action: "convert_to_spreadsheet", fileId: "...", filename: "Sales Q2 2026")
+   → get spreadsheetId
+
+3. list_sheets(spreadsheetId: "...")
+   → confirm tab structure
+
+4. analyze_range(spreadsheetId: "...", range: "Sheet1!A:Z", query: "SELECT ...")
+   → query the converted data
+```
+
+<Warning>
+  Conversion creates a **new Google Spreadsheet** — it does not modify the original Drive file. The original CSV/XLSX remains in Drive unchanged.
+</Warning>
+
+### Supported source formats
+
+From the source code comment: **CSV, TSV, XLSX, ODS** — anything Drive can convert server-side via the `files.copy` mimeType override.
