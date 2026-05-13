@@ -4,10 +4,12 @@ const withNextra = nextra({
   theme: 'nextra-theme-docs',
   themeConfig: './theme.config.jsx',
   defaultShowCopyCode: true,
-  readingTime: true,
 })
 
-export default withNextra({
-  output: 'export',          // static export for Vercel
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  transpilePackages: ['nextra', 'nextra-theme-docs'],
   images: { unoptimized: true },
-})
+}
+
+export default withNextra(nextConfig)
