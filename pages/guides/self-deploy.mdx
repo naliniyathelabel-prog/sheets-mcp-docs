@@ -1,0 +1,155 @@
+---
+title: "Self-Deploy"
+description: "Run your own sheets-mcp instance on Vercel. All required environment variables and database setup steps."
+---
+
+> **Note**
+>
+> The hosted instance at [sheets-mcp-xi.vercel.app](https://sheets-mcp-xi.vercel.app) is the easiest way to get started. Self-deploy is for teams who need data sovereignty, custom domain, or want to extend the tool surface.
+
+
+---
+
+## Prerequisites
+
+- Vercel account (Hobby or Pro)
+- Supabase project (free tier works)
+- Google Cloud Console project with Sheets API + Drive API enabled
+
+---
+
+## Step 1 — Clone and set up the repo
+
+```bash
+git clone https://github.com/<your-fork>/sheets-mcp
+cd sheets-mcp
+npm install
+```
+
+---
+
+## Step 2 — Create your Supabase project
+
+1. Go to [supabase.com](https://supabase.com) → New project
+2. Copy the **connection string** (Settings → Database → Connection string → URI mode)
+3. Copy the **Project URL** and **anon key** (Settings → API)
+
+### Run the database migrations
+
+Run the `better-auth` migrations first, then the custom tables:
+
+```bash
+# better-auth auto-migration (runs on first startup via better-auth)
+# OR manually apply:
+psql $DATABASE_URL -f better-auth_migrations/2026-04-13T03-22-30.752Z.sql
+psql $DATABASE_URL -f better-auth_migrations/2026-04-13T06-41-17.610Z.sql
+```
+
+Then apply the custom sheets-mcp tables and roles:
+
+```bash
+psql $DATABASE_URL -f scripts/slice1_write_history.sql
+psql $DATABASE_URL -f scripts/slice3_gin_index.sql
+psql $DATABASE_URL -f scripts/slice4_role_isolation.sql
+```
+
+> **⚠️ Warning**
+>
+> `slice4_role_isolation.sql` creates the `sheet_analyzer` Postgres role used by `analyze_range` and `transform_range`. **This must be applied** — without it, all SQL tool calls will fail with a `role "sheet_analyzer" does not exist` error.
+
+
+The SQL scripts are idempotent (`CREATE TABLE IF NOT EXISTS`, `DO $$ BEGIN IF NOT EXISTS ...`). Safe to re-run.
+
+---
+
+## Step 3 — Configure Google OAuth
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
+2. Enable: **Google Sheets API** and **Google Drive API**
+3. Create OAuth 2.0 Client ID (Web Application)
+4. Add **Authorized redirect URI**: `https://<your-vercel-domain>/api/auth/callback/google`
+5. Copy the **Client ID** and **Client Secret**
+
+> **Note**
+>
+> If your Google OAuth consent screen is in "Testing" mode, add your email (and any test users) under the OAuth consent screen → Test users. Apps in Testing mode only allow listed test users.
+
+
+---
+
+## Step 4 — Set environment variables
+
+In Vercel → Project Settings → Environment Variables, add:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Supabase Postgres connection string (URI mode) |
+| `BETTER_AUTH_URL` | Your Vercel deployment URL (e.g. `https://your-app.vercel.app`) |
+| `NEXT_PUBLIC_APP_URL` | Same as above |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
+| `BETTER_AUTH_SECRET` | Any strong random string (32+ chars) — used to sign sessions |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+
+> **⚠️ Warning**
+>
+> `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` **must be set** even if you don't use Supabase client-side features. The `@supabase/ssr` package in the dependency tree will cause a 500 error on Edge if they are missing.
+
+
+---
+
+## Step 5 — Deploy
+
+```bash
+npx vercel --prod
+```
+
+The build uses `next build`. Vercel auto-detects Next.js 16. No special build settings needed.
+
+> **Note**
+>
+> sheets-mcp is deployed via **Vercel CLI only** — there is no GitHub ↔ Vercel integration in the current setup. Run `vercel --prod` after each code change.
+
+
+---
+
+## Step 6 — Update your MCP config
+
+Replace the hosted URL with your own:
+
+```json
+{
+  "mcpServers": {
+    "sheets-mcp": {
+      "url": "https://your-app.vercel.app/api/mcp"
+    }
+  }
+}
+```
+
+---
+
+## Verify the deployment
+
+Hit the OIDC discovery endpoint to confirm the proxy is working:
+
+```bash
+curl https://your-app.vercel.app/.well-known/oauth-authorization-server
+```
+
+Should return a JSON object with `issuer`, `authorization_endpoint`, `token_endpoint`, etc.
+
+Then visit `https://your-app.vercel.app/login` and sign in with Google to verify the full auth flow.
+
+---
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `role "sheet_analyzer" does not exist` | Run `scripts/slice4_role_isolation.sql` against your Supabase DB |
+| `500` on every request | Check `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set in Vercel env vars |
+| Google OAuth redirect mismatch | Verify the redirect URI in Google Cloud Console matches your exact Vercel domain |
+| `invalid_grant` on token refresh | `BETTER_AUTH_SECRET` changed between deployments — all existing sessions invalidated |
+| `BETTER_AUTH_URL` mismatch | Must match the URL your app is deployed to exactly (no trailing slash) |
