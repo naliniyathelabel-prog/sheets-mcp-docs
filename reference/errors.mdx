@@ -1,0 +1,197 @@
+---
+title: "Error Reference"
+description: "Every error sheets-mcp can return — exact message text, cause, and the fix. Written for agents and developers."
+---
+
+<Note>
+**AX note for agents:** All errors are returned as structured JSON inside the MCP `content` array with `isError: true`. Parse the `error` field first. If `needsAuth: true` is present, the session is expired — surface the dashboard URL to the user immediately.
+</Note>
+
+---
+
+## Error envelope
+
+Every error follows this shape:
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "{ "error": "<message>", "stack": ["..."] }"
+  }],
+  "isError": true
+}
+```
+
+For auth expiry errors, a `needsAuth` flag is added:
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "{ "error": "Google Authentication Expired...", "needsAuth": true }"
+  }],
+  "isError": true
+}
+```
+
+---
+
+## Authentication errors
+
+### `Google Authentication Expired`
+
+```
+Google Authentication Expired. Your OAuth connection has expired or been
+revoked. Please visit the dashboard (https://sheets-mcp.vercel.app/) and
+sign in again to refresh your connection.
+```
+
+**Cause:** The stored Google OAuth token is invalid — either the refresh token was revoked by the user in Google Account settings, or `invalid_grant` / `Invalid Credentials` was returned by the Google API.
+
+**Fix:** User must visit the dashboard, sign out, and re-authorize with Google. `needsAuth: true` is set in the error JSON.
+
+**Trigger condition in code:** `errorResult()` checks for `invalid_grant` and `Invalid Credentials` in the error message before constructing the response.
+
+---
+
+### `No session found`
+
+```
+No session found
+```
+
+**Cause:** `withMcpAuth` could not resolve a session from the Bearer JWT or API key.
+
+**Fix:** Re-authenticate. For OIDC clients, restart the MCP client and complete OAuth consent. For API key clients, verify the `x-api-key` header is present and valid.
+
+---
+
+### `Google access token not found in DB. User must re-authenticate with Google.`
+
+```
+Google access token not found in DB. User must re-authenticate with Google.
+```
+
+**Cause:** The user session exists in `better-auth` but the Google OAuth token is missing from the Supabase `account` table. This can happen if the Google OAuth callback was interrupted or the account row was deleted.
+
+**Fix:** User must sign out from the dashboard and re-authorize Google.
+
+---
+
+## Write safety errors
+
+### Formula overwrite blocked
+
+```
+write_range blocked because the target range contains formula cells (N):
+<cell list>. Pass allowFormulaOverwrite: true only if you intend to replace
+formulas with static values.
+```
+
+**Cause:** The write target contains cells with formulas (values starting with `=`). The write was blocked to prevent accidental formula destruction.
+
+**Fix (agent):** If the intent is to overwrite formulas, set `allowFormulaOverwrite: true`. If not, adjust the `range` to avoid formula cells.
+
+---
+
+### ARRAYFORMULA spill blocked
+
+```
+⚠️ A target column contains an ARRAYFORMULA. Writing static values will
+permanently destroy this formula. Pass allowFormulaOverwrite: true to
+confirm you intend to replace the formula with static data.
+```
+
+**Cause:** The write target overlaps a column that contains an `ARRAYFORMULA` in its second row. The schema cache detected this before the write.
+
+**Fix (agent):** Check `_schema.arrayFormulaColumns` in the `read_range` or `analyze_range` response. Avoid those columns, or set `allowFormulaOverwrite: true` if intentional.
+
+---
+
+### Protected Range locked
+
+```
+Write blocked — range overlaps a Protected Range (locked). The sheet owner
+has locked this range. This cannot be overridden.
+```
+
+**Cause:** The target range is covered by a strict (non-warning-only) Protected Range in Google Sheets. The sheet owner has locked it.
+
+**Fix:** User must unlock the Protected Range in Google Sheets directly. This error cannot be bypassed programmatically.
+
+---
+
+### `transform_range` cell limit
+
+```
+Too many cells (N). Maximum is 50,000 per transform call.
+```
+
+**Cause:** The product of `rows × columns` in the range exceeds 50,000 cells.
+
+**Fix (agent):** Narrow the range to a subset of columns (e.g. `Sheet1!A:D` instead of `Sheet1!A:Z`), or process in batches.
+
+---
+
+### `transform_range` — 0 rows returned
+
+```
+SQL returned 0 rows. No changes written.
+```
+
+**Cause:** The SQL `SELECT` returned an empty result set. This is a safe no-op — the sheet was not modified.
+
+**Fix (agent):** Review the `WHERE` clause. Use `analyze_range` with the same query to debug before retrying.
+
+---
+
+## SQL engine errors
+
+### SQL injection attempt blocked
+
+The SQL guard strips `;` and rejects queries containing `DROP`, `DELETE`, or `UNION` before execution. No explicit error message is surfaced — the query is sanitised silently for `UNION` strips, and statement-chaining attempts result in a Postgres parse error.
+
+**Fix (agent):** Never construct SQL with user-supplied raw strings. Use JSONB key lookups (`data->>'column'`) exclusively.
+
+---
+
+### `snapshotId is required for restore`
+
+```
+snapshotId is required for restore
+```
+
+**Cause:** `restore_snapshot` was called with `action: "restore"` but no `snapshotId` was provided.
+
+**Fix (agent):** Call `restore_snapshot` with `action: "list"` first to get the available snapshot IDs for the spreadsheet, then call again with the correct `snapshotId`.
+
+---
+
+### `Snapshot not found`
+
+```
+Snapshot not found
+```
+
+**Cause:** The provided `snapshotId` does not exist in `write_history` for the current user and spreadsheet combination.
+
+**Fix (agent):** The snapshot may have been pruned (write history is capped per spreadsheet). Call `restore_snapshot` with `action: "list"` to see what is available.
+
+---
+
+## Google Sheets API errors (pass-through)
+
+These originate from the Google Sheets API v4 and are passed through as-is in the `error` field:
+
+| Error | Typical cause |
+|---|---|
+| `The caller does not have permission` | Spreadsheet is not in the user's Drive, or read-only sharing |
+| `Requested entity was not found` | Invalid `spreadsheetId` or the sheet tab was deleted |
+| `Unable to parse range` | Malformed A1 notation — check for typos in sheet name or cell refs |
+| `Quota exceeded` | 60 read/write requests per minute per user exceeded |
+| `Invalid requests[N].xxx: No sheet with id: N` | `sheetId` number doesn't exist — call `list_sheets` to get current IDs |
+
+<Tip>
+When `sheetId not found` errors occur, sheets-mcp automatically appends a list of current valid sheet IDs and titles to the error message to help the agent self-correct without an extra `list_sheets` call.
+</Tip>
