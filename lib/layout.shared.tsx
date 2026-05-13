@@ -5,7 +5,7 @@ export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
       title: 'sheets-mcp docs',
-      githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
     },
+    githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };
 }
