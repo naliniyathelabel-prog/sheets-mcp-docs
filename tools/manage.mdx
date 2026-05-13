@@ -1,0 +1,138 @@
+---
+title: "Manage Tools"
+description: "create_spreadsheet, manage_sheets, copy_sheet, batch_update_sheet, restore_snapshot."
+---
+
+## `create_spreadsheet`
+
+Creates a new blank spreadsheet and returns its ID and URL.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `title` | `string` | ✅ | Name of the new spreadsheet |
+
+```json
+// Response
+{
+  "spreadsheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
+  "url": "https://docs.google.com/spreadsheets/d/1BxiMVs0XRA..."
+}
+```
+
+---
+
+## `manage_sheets`
+
+Add, rename, or delete tabs (worksheets) inside a spreadsheet using a single tool.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
+| `action` | `enum` | ✅ | `add`, `rename`, or `delete` |
+| `title` | `string` | ❌ | Required for `add` and `rename` |
+| `sheetId` | `number` | ❌ | Required for `rename` and `delete` |
+
+### Examples
+
+```json
+// Add a new tab
+{ "action": "add", "title": "May 2026", "spreadsheetId": "..." }
+
+// Rename an existing tab
+{ "action": "rename", "sheetId": 812345678, "title": "June 2026", "spreadsheetId": "..." }
+
+// Delete a tab
+{ "action": "delete", "sheetId": 812345678, "spreadsheetId": "..." }
+```
+
+<Warning>
+  `delete` is permanent. There is no undo via the API — only Google Sheets version history can recover a deleted tab.
+</Warning>
+
+---
+
+## `copy_sheet`
+
+Copies an existing tab to another spreadsheet.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | Source spreadsheet |
+| `sheetId` | `number` | ✅ | Numeric ID of the tab to copy |
+| `destinationSpreadsheetId` | `string` | ✅ | Target spreadsheet to copy into |
+
+<Tip>
+  `copy_sheet` is useful for creating report templates — copy a formatted template tab into a new spreadsheet, then populate it with `write_range`.
+</Tip>
+
+---
+
+## `batch_update_sheet`
+
+Raw passthrough for the Google Sheets `batchUpdate` API. Use this for operations not covered by other tools: creating charts, merging cells, resizing columns, adding data validation, and more.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
+| `requests` | `object[]` | ✅ | Array of raw `batchUpdate` request objects |
+
+### Example — auto-resize all columns
+
+```json
+{
+  "spreadsheetId": "...",
+  "requests": [
+    {
+      "autoResizeDimensions": {
+        "dimensions": {
+          "sheetId": 0,
+          "dimension": "COLUMNS",
+          "startIndex": 0,
+          "endIndex": 10
+        }
+      }
+    }
+  ]
+}
+```
+
+### Example — add a basic chart
+
+```json
+{
+  "requests": [
+    {
+      "addChart": {
+        "chart": {
+          "spec": {
+            "title": "Revenue by Region",
+            "basicChart": {
+              "chartType": "BAR",
+              "domains": [{ "domain": { "sourceRange": { "sources": [{ "sheetId": 0, "startRowIndex": 0, "endRowIndex": 10, "startColumnIndex": 0, "endColumnIndex": 1 }] } } }],
+              "series": [{ "series": { "sourceRange": { "sources": [{ "sheetId": 0, "startRowIndex": 0, "endRowIndex": 10, "startColumnIndex": 1, "endColumnIndex": 2 }] } } }]
+            }
+          },
+          "position": { "overlayPosition": { "anchorCell": { "sheetId": 0, "rowIndex": 1, "columnIndex": 3 } } }
+        }
+      }
+    }
+  ]
+}
+```
+
+Refer to the [Google Sheets batchUpdate reference](https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/batchUpdate) for the full list of supported request types.
+
+---
+
+## `restore_snapshot`
+
+Restores a previously cached sheet snapshot stored in the `sheet_snapshots` Supabase table.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
+| `rangeKey` | `string` | ✅ | The snapshot key to restore |
+
+<Note>
+  Snapshots are created automatically by `read_range` and the schema cache system. They expire after 300 seconds by default. `restore_snapshot` is primarily useful for recovering from a failed `transform_range` write before the cache expires.
+</Note>
