@@ -1,0 +1,87 @@
+---
+title: "Authentication"
+description: "Two auth paths: OIDC for interactive clients, API key for headless scripts and CI."
+---
+
+sheets-mcp supports two parallel authentication paths. Both resolve to the same session context internally — your Google OAuth token is retrieved and auto-refreshed regardless of which path you use.
+
+---
+
+## Path 1 — OIDC (Claude Desktop / Cursor)
+
+This is the default path for interactive MCP clients. sheets-mcp acts as a full **OIDC provider** (via `better-auth`) so clients that speak standard OAuth2 + JWT work out of the box.
+
+### How it works
+
+```
+Claude Desktop
+    │
+    ├─ MCP handshake → sheets-mcp /api/mcp
+    │
+    ├─ 401 → redirect to /authorize
+    │
+    ├─ Google OAuth consent (scopes: Drive, Sheets)
+    │
+    ├─ better-auth persists session + encrypted OAuth token in Supabase
+    │
+    └─ JWT issued → Claude uses Bearer JWT on all subsequent requests
+```
+
+<Note>
+  **Session persistence:** Once you've consented, better-auth auto-reuses your stored session on every reconnect. You will **not** be asked to re-consent unless your Google refresh token is revoked or expires.
+</Note>
+
+<Warning>
+  If you want to switch Google accounts, you must explicitly sign out from the dashboard first. sheets-mcp uses `prompt: "select_account consent"` on Google OAuth to force the account picker — without this, it would silently reuse the last session.
+</Warning>
+
+---
+
+## Path 2 — API Key (`x-api-key`)
+
+For headless use cases — scripts, CI pipelines, custom agents — generate an API key from the dashboard and pass it as a request header.
+
+```bash
+curl https://sheets-mcp.vercel.app/api/mcp \
+  -H "x-api-key: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"method": "tools/list"}'
+```
+
+API keys are issued by `better-auth`'s API key plugin. They resolve to the same user session as OIDC — your Google token is retrieved from the Supabase account store and auto-refreshed.
+
+<Tip>
+  API keys bypass the OIDC JWT flow entirely. They are useful for automated workflows where opening a browser for consent is not possible.
+</Tip>
+
+---
+
+## Scopes requested
+
+| Scope | Why it's needed |
+|---|---|
+| `https://www.googleapis.com/auth/spreadsheets` | Read and write sheet data, formatting, and structure |
+| `https://www.googleapis.com/auth/drive` | List spreadsheets, convert files, search Drive |
+
+sheets-mcp **never** requests Gmail, Calendar, or any non-Sheets/Drive scope.
+
+---
+
+## Token lifecycle
+
+| Event | Behaviour |
+|---|---|
+| First login | Full Google consent screen shown |
+| Reconnect (same account) | Session auto-reused, no consent screen |
+| Access token expired | `better-auth` auto-refreshes via stored refresh token |
+| Refresh token revoked (by user in Google settings) | Re-consent required on next connect |
+| Account switch needed | Sign out from dashboard → reconnect |
+
+---
+
+## Security notes
+
+- OAuth tokens are stored **encrypted at rest** in Supabase using `better-auth`'s built-in encryption.
+- The server runs on Vercel with `maxDuration: 60` — no long-lived processes hold tokens in memory.
+- All MCP tool calls are scoped to the authenticated user's own Google account. There is no cross-account data access.
+- Rate limiting is intentionally disabled in the current build and is scheduled for addition before public launch.
