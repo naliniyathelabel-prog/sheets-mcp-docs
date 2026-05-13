@@ -1,24 +1,13 @@
 ---
 title: "sheets-mcp"
-description: "Full Google Sheets API v4 coverage for AI agents — 15 tools, two auth paths, SQL-powered data engine."
+description: "Full Google Sheets API v4 coverage for AI agents — 14 tools, two auth paths, SQL-powered data engine."
 ---
-
-<img
-  className="block dark:hidden"
-  src="/public/hero-light.png"
-  alt="sheets-mcp hero"
-/>
-<img
-  className="hidden dark:block"
-  src="/public/hero-dark.png"
-  alt="sheets-mcp hero"
-/>
 
 ## What is sheets-mcp?
 
-**sheets-mcp** is a hosted MCP (Model Context Protocol) server that gives any AI agent — Claude, Cursor, or your own — complete programmatic control over Google Sheets.
+**sheets-mcp** is a hosted MCP server that gives any AI agent — Claude, Cursor, or your own — complete programmatic control over Google Sheets.
 
-It exposes **15 battle-tested tools** that cover 100 % of the Sheets API v4 surface without flooding the agent context window. Two lines in your MCP config and your agent can read, write, analyze, and structurally transform spreadsheets using natural language.
+It exposes **14 source-verified tools** covering the full Sheets API v4 surface without flooding the agent context window. Two lines in your MCP config and your agent can read, write, analyze, and structurally transform spreadsheets.
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="bolt" href="/quickstart">
@@ -28,10 +17,10 @@ It exposes **15 battle-tested tools** that cover 100 % of the Sheets API v4 surf
     OIDC for Claude Desktop / Cursor. API key for scripts and CI.
   </Card>
   <Card title="Tools Reference" icon="wrench" href="/tools/overview">
-    All 15 tools with full input schemas and safety rules.
+    All 14 tools with full input schemas and safety rules.
   </Card>
   <Card title="SQL in Sheets" icon="database" href="/guides/sql-in-sheets">
-    Run Postgres queries against live sheet data without exporting.
+    Run Postgres queries against live sheet data — zero context cost.
   </Card>
 </CardGroup>
 
@@ -40,29 +29,29 @@ It exposes **15 battle-tested tools** that cover 100 % of the Sheets API v4 surf
 ## Why sheets-mcp?
 
 <AccordionGroup>
-  <Accordion title="Context-window safe by design">
-    Every tool declares its output schema (June 2025 MCP spec). The `analyze_range` and `transform_range` tools run SQL directly against Sheets data in Postgres — your agent never has to pull 50k rows into its context.
+  <Accordion title="Agent Experience (AX) first">
+    `analyze_range` and `transform_range` execute SQL directly against Sheets data in a sandboxed Postgres pool — your agent never pulls raw rows into its context window. The schema is co-delivered with every `read_range` call at zero extra latency. Tool schemas were trimmed 41% in v1.1.0 to maximize agent reasoning budget.
   </Accordion>
   <Accordion title="Fails closed, not open">
-    `write_range` and `transform_range` block writes that would silently destroy formula cells or spill into ARRAYFORMULA ranges. You opt in to overrides explicitly with `allowFormulaOverwrite: true`.
+    `write_range` and `transform_range` block writes that would silently destroy formula cells or spill into ARRAYFORMULA ranges. Opt in to overrides explicitly with `allowFormulaOverwrite: true`. Protected Ranges are respected — strict locks cannot be bypassed programmatically.
   </Accordion>
   <Accordion title="Two auth paths">
-    Use OIDC (OAuth2 + JWT) for interactive clients like Claude Desktop and Cursor. Use an API key (`x-api-key` header) for headless scripts, CI pipelines, or custom agents.
+    OIDC (OAuth2 + JWT) for interactive clients like Claude Desktop and Cursor — full browser-based consent flow. API key (`x-api-key` header) for headless scripts, CI pipelines, and custom agents. Both paths resolve to the same Google OAuth session internally.
   </Accordion>
-  <Accordion title="Batch-first API surface">
-    Tools prefer batch operations over sequential calls — Sheets API charges per HTTP request. `batch_update_sheet` exposes the full `batchUpdate` surface for charts, merges, and styling in a single round-trip.
+  <Accordion title="Full undo support">
+    Every `write_range` and `transform_range` call saves a pre-write snapshot to `write_history`. `restore_snapshot` can list and restore up to 50 snapshots per spreadsheet — no manual backups needed.
   </Accordion>
 </AccordionGroup>
 
 ---
 
-## Tool surface at a glance
+## Tool surface
 
 | Category | Tools |
 |---|---|
 | **Read** | `list_spreadsheets`, `list_sheets`, `read_range` |
 | **Write** | `write_range`, `append_rows`, `clear_range`, `format_cells` |
-| **Analyze** | `analyze_range`, `transform_range` |
+| **SQL** | `analyze_range`, `transform_range` |
 | **Manage** | `create_spreadsheet`, `manage_sheets`, `copy_sheet`, `batch_update_sheet`, `restore_snapshot` |
 | **Drive** | `manage_drive` |
 
@@ -70,4 +59,4 @@ It exposes **15 battle-tested tools** that cover 100 % of the Sheets API v4 surf
 
 ## Stack
 
-Built on **Next.js 16** deployed to Vercel. Auth via **better-auth** with Google OAuth. Data pooling via **Supabase Postgres**. Observability via **OpenTelemetry**.
+**Next.js 16** on Vercel · **better-auth** (OIDC provider + API key plugin) · **Supabase Postgres** (sessions, schema cache, write history) · **googleapis** JS SDK with proactive token refresh · **OpenTelemetry** (stdout trace exporter for agent log visibility) · **Zod v4** schemas · **Framer Motion** UI
