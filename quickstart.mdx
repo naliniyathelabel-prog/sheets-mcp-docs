@@ -1,0 +1,91 @@
+---
+title: "Quickstart"
+description: "Connect your first AI agent to Google Sheets in under 5 minutes."
+---
+
+## Prerequisites
+
+- A Google account with at least one spreadsheet in Drive
+- Claude Desktop **or** Cursor IDE installed
+- Node.js 18+ (for local testing only)
+
+<Steps>
+
+  <Step title="Create your sheets-mcp account">
+    Go to [sheets-mcp.vercel.app](https://sheets-mcp.vercel.app) and click **Sign in with Google**.
+
+    Grant the requested Drive and Sheets scopes. sheets-mcp stores your OAuth token encrypted in Supabase — it never leaves your account boundary.
+  </Step>
+
+  <Step title="Copy your MCP server URL">
+    After login, your dashboard shows a personal MCP endpoint:
+
+    ```
+    https://sheets-mcp.vercel.app/api/mcp
+    ```
+
+    This URL supports both **SSE** and **HTTP** transports automatically.
+  </Step>
+
+  <Step title="Add to Claude Desktop">
+    Open `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) and add:
+
+    ```json
+    {
+      "mcpServers": {
+        "sheets-mcp": {
+          "url": "https://sheets-mcp.vercel.app/api/mcp"
+        }
+      }
+    }
+    ```
+
+    Restart Claude Desktop. On the next MCP handshake, Claude will open a browser window for Google OAuth consent.
+
+    <Note>
+      Already connected before? sheets-mcp persists your session in Supabase. Re-consent only happens on token revocation or refresh token expiry.
+    </Note>
+  </Step>
+
+  <Step title="Add to Cursor">
+    In Cursor → Settings → MCP, add a new server:
+
+    ```json
+    {
+      "name": "sheets-mcp",
+      "url": "https://sheets-mcp.vercel.app/api/mcp"
+    }
+    ```
+
+    See the [full Cursor guide](/guides/connect-cursor) for screenshots.
+  </Step>
+
+  <Step title="Run your first command">
+    In Claude Desktop or Cursor, try:
+
+    > "List all my Google Sheets spreadsheets"
+
+    Claude will call `list_spreadsheets` and return your Drive file list. Then try:
+
+    > "Read the first 10 rows of Sheet1 in spreadsheet [ID]"
+
+    You now have a fully wired AI ↔ Google Sheets pipeline.
+  </Step>
+
+</Steps>
+
+---
+
+## What's next?
+
+<CardGroup cols={3}>
+  <Card title="Authentication" icon="lock" href="/authentication">
+    Understand both auth paths in detail.
+  </Card>
+  <Card title="Tools Overview" icon="wrench" href="/tools/overview">
+    Browse all 15 tools and their schemas.
+  </Card>
+  <Card title="SQL in Sheets" icon="database" href="/guides/sql-in-sheets">
+    Aggregate sheet data with Postgres SQL.
+  </Card>
+</CardGroup>
