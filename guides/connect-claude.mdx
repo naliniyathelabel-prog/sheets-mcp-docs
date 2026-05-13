@@ -1,0 +1,93 @@
+---
+title: "Connect Claude Desktop"
+description: "Step-by-step guide to wiring sheets-mcp into Claude Desktop via OIDC."
+---
+
+## Prerequisites
+
+- [Claude Desktop](https://claude.ai/download) installed (macOS or Windows)
+- A sheets-mcp account at [sheets-mcp.vercel.app](https://sheets-mcp.vercel.app)
+
+---
+
+<Steps>
+
+  <Step title="Open the Claude Desktop config file">
+
+    **macOS:**
+    ```bash
+    open ~/Library/Application\ Support/Claude/
+    ```
+
+    **Windows:**
+    ```
+    %APPDATA%\Claude\
+    ```
+
+    Open `claude_desktop_config.json` in your editor. If it does not exist, create it.
+
+  </Step>
+
+  <Step title="Add the sheets-mcp server">
+
+    ```json
+    {
+      "mcpServers": {
+        "sheets-mcp": {
+          "url": "https://sheets-mcp.vercel.app/api/mcp"
+        }
+      }
+    }
+    ```
+
+    If you already have other MCP servers configured, add `sheets-mcp` as a new key inside `mcpServers`.
+
+  </Step>
+
+  <Step title="Restart Claude Desktop">
+
+    Fully quit and relaunch Claude Desktop. On restart, Claude detects the new MCP server and initiates the auth handshake.
+
+  </Step>
+
+  <Step title="Complete Google OAuth consent">
+
+    Claude will open a browser window pointing to `sheets-mcp.vercel.app/authorize`. Sign in with your Google account and grant the Drive and Sheets scopes.
+
+    Once consent is complete, the browser redirects back and the modal closes automatically (the authorize page polls every 2 seconds for provisioning confirmation).
+
+  </Step>
+
+  <Step title="Verify the connection">
+
+    In Claude, type:
+
+    > "List all my Google spreadsheets"
+
+    Claude calls `list_spreadsheets` and returns your Drive files. You are connected.
+
+  </Step>
+
+</Steps>
+
+---
+
+## Switching Google accounts
+
+1. Go to [sheets-mcp.vercel.app/dashboard](https://sheets-mcp.vercel.app/dashboard)
+2. Click **Sign out**
+3. Restart Claude Desktop
+4. Repeat the OAuth consent flow with the new account
+
+sheets-mcp uses `prompt: "select_account consent"` on the Google OAuth screen — the account picker is always shown, preventing silent reuse of a cached session.
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `list_all_sheets` returns `[]` | Auth handshake not completed. Restart Claude and re-authorize. |
+| Tools not appearing in Claude | Check that `claude_desktop_config.json` is valid JSON. Use a JSON validator. |
+| Google consent screen not opening | Check your firewall or browser default — Claude opens the system default browser. |
+| `401 Unauthorized` on all tool calls | Your refresh token was revoked. Sign out from the dashboard and re-authorize. |
