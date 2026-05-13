@@ -140,7 +140,7 @@ sheets-mcp uses the **Streamable HTTP** transport (the modern MCP transport as o
 
 | | OIDC | API key |
 |---|---|---|
-| **Header** | `Authorization: Bearer <JWT>` | `x-api-key: <key>` |
+| **Header** | `Authorization: Bearer ` | `x-api-key: <key>` |
 | **Issued by** | better-auth OAuth2 consent flow | Dashboard → Create API key |
 | **Used by** | Claude Desktop, Cursor | Scripts, CI pipelines, custom agents |
 | **Session** | Decoded JWT → `oauthAccessToken` row | Key lookup → user session |
