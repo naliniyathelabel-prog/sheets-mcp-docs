@@ -111,7 +111,7 @@ or pass allowFormulaOverwrite: true if this overwrite is intentional.
 
 **Exact message (from `runPreWriteSchemaGuards()`):**
 ```
-⚠️ A target column contains an ARRAYFORMULA. Writing static values will permanently
+⚠ A target column contains an ARRAYFORMULA. Writing static values will permanently
 destroy this formula. Pass allowFormulaOverwrite: true to confirm you intend to
 replace the formula with static data.
 ```
@@ -141,7 +141,7 @@ locked this range. This cannot be overridden.
 When `warningOnly: true`, the write proceeds but `_warnings` is added to the response:
 
 ```json
-{ "updatedCells": 6, "_warnings": ["⚠️ Target range has a user-set protection warning. Proceeding as requested."] }
+{ "updatedCells": 6, "_warnings": ["⚠ Target range has a user-set protection warning. Proceeding as requested."] }
 ```
 
 ---
@@ -257,7 +257,7 @@ This is not an error — the rename succeeded. But cross-sheet formula reference
 - `;` is stripped before the query reaches Postgres — no error, but statement chaining is silently prevented
 - `DROP`, `DELETE`, `UNION` patterns are rejected — results in a Postgres parse error or the keyword is stripped
 
-**Agent fix:** Never pass raw user strings directly into SQL. Use only `data->>'column_name'` JSONB lookups.
+**Agent fix:** Never pass raw user strings directly into SQL. Use only `data → >'column_name'` JSONB lookups.
 
 ---
 
@@ -273,7 +273,7 @@ These originate from the Sheets API v4 and are returned as-is in the `error` fie
 | `Quota exceeded` | 60 requests/min/user exceeded |
 | `No grid with id: ` | `sheetId` number no longer exists |
 
-> **💡 Tip**
+**Tip:**
 >
 > When `No grid with id: N` occurs, sheets-mcp auto-appends the list of current valid sheet IDs and titles using `formatSheetIdNotFoundMessage()`:
 
