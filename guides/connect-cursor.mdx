@@ -1,0 +1,101 @@
+---
+title: "Connect Cursor"
+description: "Add sheets-mcp to Cursor IDE using the MCP settings panel."
+---
+
+## Prerequisites
+
+- [Cursor](https://cursor.sh) IDE installed (v0.43 or later recommended)
+- A sheets-mcp account at [sheets-mcp.vercel.app](https://sheets-mcp.vercel.app)
+
+---
+
+<Steps>
+
+  <Step title="Open Cursor MCP settings">
+
+    Go to **Cursor → Settings → Features → MCP Servers**.
+
+    Alternatively, open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search for **MCP: Add Server**.
+
+  </Step>
+
+  <Step title="Add a new MCP server">
+
+    Click **Add new MCP server** and fill in:
+
+    - **Name:** `sheets-mcp`
+    - **URL:** `https://sheets-mcp.vercel.app/api/mcp`
+    - **Transport:** Auto (Cursor will negotiate SSE or HTTP)
+
+    Or add it directly to your `~/.cursor/mcp.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "sheets-mcp": {
+          "url": "https://sheets-mcp.vercel.app/api/mcp"
+        }
+      }
+    }
+    ```
+
+  </Step>
+
+  <Step title="Reload Cursor">
+
+    Press `Cmd+Shift+P` → **Developer: Reload Window** to apply the config.
+
+  </Step>
+
+  <Step title="Authorize via Google OAuth">
+
+    The first time Cursor calls a sheets-mcp tool, it will open the OIDC authorize URL in your browser. Complete the Google sign-in and grant Sheets + Drive scopes.
+
+  </Step>
+
+  <Step title="Test in Cursor Chat">
+
+    Open a Cursor Chat window (Cmd+L) and type:
+
+    > "Use sheets-mcp to list my Google spreadsheets"
+
+    Cursor's agent will invoke `list_spreadsheets` and display the results inline.
+
+  </Step>
+
+</Steps>
+
+---
+
+## Using an API key instead of OIDC
+
+If you prefer API key auth (useful for Cursor agent pipelines that run headlessly):
+
+1. Generate an API key from [sheets-mcp.vercel.app/dashboard](https://sheets-mcp.vercel.app/dashboard)
+2. Add it to your Cursor MCP config:
+
+```json
+{
+  "mcpServers": {
+    "sheets-mcp": {
+      "url": "https://sheets-mcp.vercel.app/api/mcp",
+      "headers": {
+        "x-api-key": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+See [Authentication](/authentication#path-2--api-key-x-api-key) for full API key details.
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Server shows as "disconnected" | Check the URL has no trailing slash. Reload the Cursor window. |
+| OAuth window does not open | Cursor uses the system browser. Ensure your default browser is set. |
+| Tools visible but returning errors | Open Cursor DevTools (`Help → Toggle Developer Tools`) and check the MCP panel for error messages. |
