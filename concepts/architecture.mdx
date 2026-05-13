@@ -1,109 +1,184 @@
 ---
 title: "Architecture"
-description: "How sheets-mcp works internally: Next.js as both OIDC provider and MCP server."
+description: "How sheets-mcp works: Next.js as OIDC provider, MCP server, and OAuth proxy in a single deployment."
 ---
 
 ## Overview
 
-sheets-mcp is a **single Next.js 16 application** deployed on Vercel that serves three roles simultaneously:
+sheets-mcp is a **single Next.js 16 application** on Vercel serving three simultaneous roles:
 
-1. **OIDC Provider** — issues JWTs to MCP clients (Claude Desktop, Cursor)
-2. **MCP Server** — handles tool calls over SSE and HTTP transports
-3. **OAuth Proxy** — exchanges and refreshes Google OAuth tokens on behalf of the authenticated user
+1. **OIDC Provider** — issues JWTs to MCP clients via `better-auth`'s `mcp()` plugin
+2. **MCP Server** — handles all 14 tool calls over SSE and HTTP transports
+3. **OAuth Proxy** — exchanges and auto-refreshes Google OAuth tokens on every request
 
-This unified architecture means there is no separate auth service, no separate API gateway, and no additional infrastructure to manage.
+There is no separate auth service, API gateway, or sidecar. One repo, one Vercel deployment.
 
 ---
 
 ## Request flow
 
 ```
-AI Client (Claude / Cursor / custom agent)
+MCP Client (Claude / Cursor / API key script)
         │
-        │  Bearer JWT  (OIDC path)
-        │  x-api-key   (API key path)
+        │  Bearer JWT   — OIDC path
+        │  x-api-key    — API key path
         ▼
-  Next.js /api/[transport]/route.ts
+  proxy.ts (Next.js middleware)
         │
-        ├── withMcpAuth()         ← intercepts JWT, resolves session
-        ├── createMcpHandler()    ← routes tool name → handler function
-        │
-        ├── getGoogleClients()    ← decrypts + refreshes OAuth token
-        │        │
-        │        ├── googleapis sheetsClient
-        │        └── googleapis driveClient
-        │
-        ├── Safety guards         ← formula check, protected range check
-        │
-        └── Google Sheets API v4  ← actual data operation
+        ├── Serves /.well-known/oauth-* metadata (OIDC discovery)
+        └── Passes all other requests through
                 │
-                └── Response → MCP tool result → AI client
+                ▼
+  /api/[transport]/route.ts   (62,750-line MCP core)
+        │
+        ├── withMcpAuth()         — resolves JWT or API key → session
+        ├── createMcpHandler()    — routes tool name → handler
+        │
+        ├── getGoogleClients()    — fetches + proactively refreshes OAuth token
+        │       ├── sheetsClient  (Sheets API v4)
+        │       ├── driveClient   (Drive API v3)
+        │       └── scriptClient  (Apps Script API v1 — provisioned, not yet exposed)
+        │
+        ├── Safety guards         — formula check, schema guard, protected range
+        │
+        └── Google Sheets API v4 → result → MCP tool response → client
 ```
 
 ---
 
-## Key components
+## Key source files
 
-### `/api/[transport]/route.ts`
+### `proxy.ts` — OIDC discovery middleware
 
-The core of the server — a **787-line single-file MCP transport** that:
+Intercepts all `/.well-known/oauth-*` paths and returns the correct OAuth metadata JSON. This is what allows Claude Desktop and Cursor to discover the OIDC endpoints automatically without manual config.
 
-- Accepts both `GET` (SSE) and `POST` (HTTP) on the same dynamic segment `[transport]`
-- Wraps every tool in `withMcpAuth` to enforce session resolution
-- Implements all 15 tools using the `@modelcontextprotocol/sdk` server API
-- Enforces `maxDuration: 60` for long-running Sheets API calls on Vercel
+Served endpoints:
+- `/.well-known/oauth-authorization-server`
+- `/.well-known/openid-configuration`
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/oauth-protected-resource/{path}` (per-resource variant)
 
-<Note>
-  The `[transport]` dynamic segment is required. Hardcoding `/api/mcp` would break SSE because `mcp-handler` needs a dynamic path to distinguish transport types.
-</Note>
+### `/api/[transport]/route.ts` — MCP transport
 
-### `better-auth` + Supabase
+The core of the server. Key facts from the source:
 
-`better-auth` handles the full OAuth2/OIDC lifecycle:
+- `maxDuration: 60` — Vercel function timeout for long Sheets API operations
+- `MAX_RESPONSE_ROWS = 1000`, `MAX_RESPONSE_BYTES = 2MB` — response clamp constants
+- `[transport]` dynamic segment is **required** — `mcp-handler` uses it to negotiate SSE vs HTTP. Hardcoding `/api/mcp` would break SSE.
+- Full CORS headers on every response (`Access-Control-Allow-Origin: *`)
 
-- Google OAuth consent and callback
-- Session storage in Supabase (`account` table with camelCase columns — always quote them in raw SQL: `"accessToken"`, `"userId"`)
-- Token decryption via `auth.api.getAccessToken({ body: { providerId } })`
-- Automatic refresh token rotation on expiry
+### `lib/auth.ts` — better-auth config
 
-### `lib/mcp-google.ts`
+```ts
+betterAuth({
+  emailAndPassword: { enabled: true },   // email+password signup supported
+  socialProviders: { google: {
+    scope: ['spreadsheets', 'drive.readonly', 'drive.file'],
+    prompt: "select_account consent"     // forces account picker every time
+  }},
+  plugins: [
+    mcp({ loginPage: "/login", consentPage: "/authorize" }),
+    apiKey({ enableSessionForAPIKeys: true, rateLimit: { enabled: false } })
+  ],
+  rateLimit: { enabled: false }          // intentionally disabled pre-launch
+})
+```
 
-A thin helper that:
-1. Reads the user session from `withMcpAuth`
-2. Calls `auth.api.getAccessToken` to get a live, decrypted access token
-3. Constructs authenticated `googleapis` `sheetsClient` and `driveClient` instances
+### `lib/mcp-google.ts` — token retrieval + auto-refresh
 
-### `lib/sheets-safety.ts`
+Reads the Google OAuth token from the Supabase `account` table (camelCase columns — always quoted in raw SQL: `"accessToken"`, `"userId"`). Proactively refreshes if the token expires within 5 minutes. Persists the refreshed token back to Supabase immediately.
 
-The write-safety layer. Before any write operation:
+```ts
+// Proactive refresh condition (from source):
+const isExpiredOrClose = !expiryDateMs || (expiryDateMs < Date.now() + 5 * 60 * 1000);
+```
 
-1. Parses the A1 range into a structured footprint (`startRowIndex`, `endRowIndex`, `startColumnIndex`, `endColumnIndex`)
-2. Fetches the target range in `FORMULA` render mode
-3. Detects formula cells and ARRAYFORMULA spill risks
-4. Throws a structured, human-readable error if a destructive write is detected
-5. Optionally bypassed with `allowFormulaOverwrite: true`
+If refresh fails, continues with the existing token (may still be valid) and clears `expiry_date` to prevent the google-auth-library from looping on failed auto-refresh.
 
-### `lib/db.ts` — Supabase pg pool
+### `lib/db.ts` — Postgres pool
 
-Used by `analyze_range` and `transform_range` to execute Postgres SQL against sheet data loaded into a JSONB temporary schema. Also used for schema caching (`sheet_snapshots` table, 300-second TTL).
+```ts
+new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 3,                    // max 3 connections — conservative for Vercel serverless
+  idleTimeoutMillis: 5000,
+  connectionTimeoutMillis: 5000,
+})
+```
+
+Two separate `Pool` instances exist: one in `lib/db.ts` (used by MCP tools) and one inside `lib/auth.ts` (used by better-auth). This is a known technical debt item — they are not consolidated.
+
+### `src/instrumentation.ts` — OpenTelemetry
+
+```ts
+// ConsoleSpanExporter → stdout
+// Designed specifically for agent-visible trace output:
+// "Gives the Antigravity Agent native X-Ray vision to read traces
+//  directly via 'command_status' output logs"
+```
+
+Traces are exported to **console stdout only** — not to a remote OTLP collector. This is intentional for the current build stage: traces are visible in Vercel function logs.
+
+---
+
+## Database schema
+
+### Tables (from migrations + SQL scripts)
+
+| Table | Purpose |
+|---|---|
+| `user` | better-auth user accounts |
+| `session` | active sessions |
+| `account` | OAuth tokens per provider (Google) — camelCase columns |
+| `verification` | email verification tokens |
+| `oauthApplication` | OIDC client registrations (Claude, Cursor) |
+| `oauthAccessToken` | MCP JWT tokens |
+| `apikey` | API keys |
+| `sheet_snapshots` | Range data cache + `__schema__` cache (TTL-based) |
+| `write_history` | Pre-write snapshots for `restore_snapshot` (max 50 per user+spreadsheet) |
+
+### `sheet_snapshots`
+
+Dual-purpose cache table:
+- **Range data cache** (key = normalized A1 range, TTL = 60s) — used by `analyze_range`
+- **Schema cache** (key = `__schema__`, TTL = 300s) — used by all write tools for formula/protected-range guards
+
+Invalidated on every successful write by `DELETE FROM sheet_snapshots WHERE user_id = $1 AND spreadsheet_id = $2`.
+
+### `write_history` + `prune_write_history()`
+
+Stores `before_values` JSONB snapshots before every `write_range` and `transform_range` call. A Postgres function `prune_write_history()` is called after every insert to keep the last 50 snapshots per user+spreadsheet. **Not a trigger** — called explicitly.
+
+### `sheet_analyzer` Postgres role
+
+A restricted role with no table privileges, used by `analyze_range` and `transform_range` via `SET LOCAL ROLE sheet_analyzer`. Cannot read `account`, `user`, `session`, `apikey`, `sheet_snapshots`, or `write_history` — even if SQL injection bypasses the regex guard.
 
 ---
 
 ## Deployment
 
-sheets-mcp deploys directly to **Vercel** via CLI (`vercel --prod`). There is no GitHub ↔ Vercel integration — deploys are triggered manually.
+Deployed to Vercel via **CLI only** (`vercel --prod`). No GitHub ↔ Vercel integration.
 
-Required environment variables:
+### Required environment variables
 
-| Variable | Purpose |
+| Variable | Source |
 |---|---|
-| `BETTER_AUTH_SECRET` | HMAC signing key for sessions |
-| `GOOGLE_CLIENT_ID` | OAuth 2.0 client ID |
-| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 client secret |
 | `DATABASE_URL` | Supabase Postgres connection string |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `BETTER_AUTH_URL` | Full app URL (e.g. `https://sheets-mcp-xi.vercel.app`) |
+| `NEXT_PUBLIC_APP_URL` | Same as above |
+| `GOOGLE_CLIENT_ID` | Google Cloud Console → OAuth 2.0 Client ID |
+| `GOOGLE_CLIENT_SECRET` | Google Cloud Console → OAuth 2.0 Client Secret |
+| `BETTER_AUTH_SECRET` | HMAC signing key for sessions |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (required even if SSR not used) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 
 <Warning>
-  `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` must be set even if Supabase SSR middleware is not in use. The edge runtime will throw a 500 if these are missing.
+  `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` must be set. The `@supabase/ssr` package is in the dependency tree and the Edge runtime will throw `500` if these are missing, even if you don't use Supabase SSR middleware.
 </Warning>
+
+### Google Cloud Console requirements
+
+- Sheets API **enabled**
+- Drive API **enabled**
+- OAuth consent screen configured (add test users if in "Testing" mode)
+- OAuth Client ID (Web Application) with redirect URI: `https://sheets-mcp-xi.vercel.app/api/auth/callback/google`
