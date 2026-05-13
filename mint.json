@@ -6,12 +6,12 @@
   },
   "favicon": "/public/favicon.svg",
   "colors": {
-    "primary": "#16a34a",
-    "light": "#4ade80",
-    "dark": "#15803d",
+    "primary": "#5A9E8F",
+    "light": "#6ab3a3",
+    "dark": "#4c8c7e",
     "background": {
       "light": "#ffffff",
-      "dark": "#0a0a0a"
+      "dark": "#0E0E0E"
     }
   },
   "topbarLinks": [
@@ -22,23 +22,23 @@
   ],
   "topbarCtaButton": {
     "name": "Get started",
-    "url": "https://sheets-mcp.vercel.app"
+    "url": "https://sheets-mcp-xi.vercel.app"
   },
   "tabs": [
     { "name": "Guides", "url": "guides" },
     { "name": "Tools Reference", "url": "tools" },
-    { "name": "Changelog", "url": "changelog" }
+    { "name": "Reference", "url": "reference" }
   ],
   "anchors": [
+    {
+      "name": "Live App",
+      "icon": "arrow-up-right-from-square",
+      "url": "https://sheets-mcp-xi.vercel.app"
+    },
     {
       "name": "GitHub",
       "icon": "github",
       "url": "https://github.com/naliniyathelabel-prog/sheets-mcp"
-    },
-    {
-      "name": "Vercel Deploy",
-      "icon": "triangle",
-      "url": "https://vercel.com/new/clone?repository-url=https://github.com/naliniyathelabel-prog/sheets-mcp"
     }
   ],
   "navigation": [
