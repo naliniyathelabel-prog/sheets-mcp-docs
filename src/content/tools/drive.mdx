@@ -15,8 +15,8 @@ Searches Google Drive for files matching a query. Automatically excludes trashed
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `action` | `"search"` | ✅ | — |
-| `query` | `string` | ✅ for search | Drive search query string |
+| `action` | `"search"` | ✓ | — |
+| `query` | `string` | ✓ for search | Drive search query string |
 
 Returns up to **20 files** per call (hardcoded `pageSize: 20`).
 
@@ -61,9 +61,9 @@ Converts a Drive file (CSV, TSV, XLSX, ODS) to a native Google Spreadsheet using
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `action` | `"convert_to_spreadsheet"` | ✅ | — |
-| `fileId` | `string` | ✅ | Drive file ID from `search` |
-| `filename` | `string` | ❌ | New name for the converted spreadsheet |
+| `action` | `"convert_to_spreadsheet"` | ✓ | — |
+| `fileId` | `string` | ✓ | Drive file ID from `search` |
+| `filename` | `string` | ✗ | New name for the converted spreadsheet |
 
 ### Response
 
@@ -94,9 +94,7 @@ The `hint` field is literal text from the server response — it tells agents wh
    → query the converted data
 ```
 
-> **⚠️ Warning**
->
-> Conversion creates a **new Google Spreadsheet** — it does not modify the original Drive file. The original CSV/XLSX remains in Drive unchanged.
+**Warning:** Conversion creates a **new Google Spreadsheet** — it does not modify the original Drive file. The original CSV/XLSX remains in Drive unchanged.
 
 
 ### Supported source formats
