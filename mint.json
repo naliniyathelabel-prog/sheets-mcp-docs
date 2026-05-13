@@ -1,0 +1,87 @@
+{
+  "name": "sheets-mcp",
+  "logo": {
+    "light": "/public/logo-light.svg",
+    "dark": "/public/logo-dark.svg"
+  },
+  "favicon": "/public/favicon.svg",
+  "colors": {
+    "primary": "#16a34a",
+    "light": "#4ade80",
+    "dark": "#15803d",
+    "background": {
+      "light": "#ffffff",
+      "dark": "#0a0a0a"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/naliniyathelabel-prog/sheets-mcp"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get started",
+    "url": "https://sheets-mcp.vercel.app"
+  },
+  "tabs": [
+    { "name": "Guides", "url": "guides" },
+    { "name": "Tools Reference", "url": "tools" },
+    { "name": "Changelog", "url": "changelog" }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/naliniyathelabel-prog/sheets-mcp"
+    },
+    {
+      "name": "Vercel Deploy",
+      "icon": "triangle",
+      "url": "https://vercel.com/new/clone?repository-url=https://github.com/naliniyathelabel-prog/sheets-mcp"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": ["index", "quickstart", "authentication"]
+    },
+    {
+      "group": "Concepts",
+      "pages": ["concepts/architecture", "concepts/safety"]
+    },
+    {
+      "group": "Tools",
+      "pages": [
+        "tools/overview",
+        "tools/read",
+        "tools/write",
+        "tools/analyze",
+        "tools/manage",
+        "tools/drive"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/connect-claude",
+        "guides/connect-cursor",
+        "guides/sql-in-sheets"
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": ["reference/errors", "changelog"]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/naliniyathelabel-prog/sheets-mcp"
+  },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true
+  },
+  "search": {
+    "prompt": "Search sheets-mcp docs..."
+  }
+}
