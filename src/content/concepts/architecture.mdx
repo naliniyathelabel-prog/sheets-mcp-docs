@@ -19,29 +19,29 @@ There is no separate auth service, API gateway, or sidecar. One repo, one Vercel
 
 ```
 MCP Client (Claude / Cursor / API key script)
-        │
-        │  Bearer JWT   — OIDC path
-        │  x-api-key    — API key path
-        ▼
-  proxy.ts (Next.js middleware)
-        │
-        ├── Serves /.well-known/oauth-* metadata (OIDC discovery)
-        └── Passes all other requests through
-                │
-                ▼
-  /api/[transport]/route.ts   (62,750-line MCP core)
-        │
-        ├── withMcpAuth()         — resolves JWT or API key → session
-        ├── createMcpHandler()    — routes tool name → handler
-        │
-        ├── getGoogleClients()    — fetches + proactively refreshes OAuth token
-        │       ├── sheetsClient  (Sheets API v4)
-        │       ├── driveClient   (Drive API v3)
-        │       └── scriptClient  (Apps Script API v1 — provisioned, not yet exposed)
-        │
-        ├── Safety guards         — formula check, schema guard, protected range
-        │
-        └── Google Sheets API v4 → result → MCP tool response → client
+  |
+  |  Bearer JWT   -- OIDC path
+  |  x-api-key    -- API key path
+  v
+proxy.ts (Next.js middleware)
+  |
+  +-- Serves /.well-known/oauth-* metadata (OIDC discovery)
+  +-- Passes all other requests through
+        |
+        v
+/api/[transport]/route.ts   (MCP core)
+  |
+  +-- withMcpAuth()         -- resolves JWT or API key -> session
+  +-- createMcpHandler()    -- routes tool name -> handler
+  |
+  +-- getGoogleClients()    -- fetches + proactively refreshes OAuth token
+  |     +-- sheetsClient    (Sheets API v4)
+  |     +-- driveClient     (Drive API v3)
+  |     +-- scriptClient    (Apps Script API v1)
+  |
+  +-- Safety guards         -- formula check, schema guard, protected range
+  |
+  +-- Google Sheets API v4 -> result -> MCP tool response -> client
 ```
 
 ---
@@ -111,7 +111,7 @@ Two separate `Pool` instances exist: one in `lib/db.ts` (used by MCP tools) and 
 ### `src/instrumentation.ts` — OpenTelemetry
 
 ```ts
-// ConsoleSpanExporter → stdout
+// ConsoleSpanExporter -> stdout
 // Designed specifically for agent-visible trace output:
 // "Gives the Antigravity Agent native X-Ray vision to read traces
 //  directly via 'command_status' output logs"
@@ -166,8 +166,8 @@ Deployed to Vercel via **CLI only** (`vercel --prod`). No GitHub ↔ Vercel inte
 | `DATABASE_URL` | Supabase Postgres connection string |
 | `BETTER_AUTH_URL` | Full app URL (e.g. `https://sheets-mcp-xi.vercel.app`) |
 | `NEXT_PUBLIC_APP_URL` | Same as above |
-| `GOOGLE_CLIENT_ID` | Google Cloud Console → OAuth 2.0 Client ID |
-| `GOOGLE_CLIENT_SECRET` | Google Cloud Console → OAuth 2.0 Client Secret |
+| `GOOGLE_CLIENT_ID` | Google Cloud Console -> OAuth 2.0 Client ID |
+| `GOOGLE_CLIENT_SECRET` | Google Cloud Console -> OAuth 2.0 Client Secret |
 | `BETTER_AUTH_SECRET` | HMAC signing key for sessions |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (required even if SSR not used) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
