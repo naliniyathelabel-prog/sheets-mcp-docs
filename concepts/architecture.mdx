@@ -1,0 +1,109 @@
+---
+title: "Architecture"
+description: "How sheets-mcp works internally: Next.js as both OIDC provider and MCP server."
+---
+
+## Overview
+
+sheets-mcp is a **single Next.js 16 application** deployed on Vercel that serves three roles simultaneously:
+
+1. **OIDC Provider** — issues JWTs to MCP clients (Claude Desktop, Cursor)
+2. **MCP Server** — handles tool calls over SSE and HTTP transports
+3. **OAuth Proxy** — exchanges and refreshes Google OAuth tokens on behalf of the authenticated user
+
+This unified architecture means there is no separate auth service, no separate API gateway, and no additional infrastructure to manage.
+
+---
+
+## Request flow
+
+```
+AI Client (Claude / Cursor / custom agent)
+        │
+        │  Bearer JWT  (OIDC path)
+        │  x-api-key   (API key path)
+        ▼
+  Next.js /api/[transport]/route.ts
+        │
+        ├── withMcpAuth()         ← intercepts JWT, resolves session
+        ├── createMcpHandler()    ← routes tool name → handler function
+        │
+        ├── getGoogleClients()    ← decrypts + refreshes OAuth token
+        │        │
+        │        ├── googleapis sheetsClient
+        │        └── googleapis driveClient
+        │
+        ├── Safety guards         ← formula check, protected range check
+        │
+        └── Google Sheets API v4  ← actual data operation
+                │
+                └── Response → MCP tool result → AI client
+```
+
+---
+
+## Key components
+
+### `/api/[transport]/route.ts`
+
+The core of the server — a **787-line single-file MCP transport** that:
+
+- Accepts both `GET` (SSE) and `POST` (HTTP) on the same dynamic segment `[transport]`
+- Wraps every tool in `withMcpAuth` to enforce session resolution
+- Implements all 15 tools using the `@modelcontextprotocol/sdk` server API
+- Enforces `maxDuration: 60` for long-running Sheets API calls on Vercel
+
+<Note>
+  The `[transport]` dynamic segment is required. Hardcoding `/api/mcp` would break SSE because `mcp-handler` needs a dynamic path to distinguish transport types.
+</Note>
+
+### `better-auth` + Supabase
+
+`better-auth` handles the full OAuth2/OIDC lifecycle:
+
+- Google OAuth consent and callback
+- Session storage in Supabase (`account` table with camelCase columns — always quote them in raw SQL: `"accessToken"`, `"userId"`)
+- Token decryption via `auth.api.getAccessToken({ body: { providerId } })`
+- Automatic refresh token rotation on expiry
+
+### `lib/mcp-google.ts`
+
+A thin helper that:
+1. Reads the user session from `withMcpAuth`
+2. Calls `auth.api.getAccessToken` to get a live, decrypted access token
+3. Constructs authenticated `googleapis` `sheetsClient` and `driveClient` instances
+
+### `lib/sheets-safety.ts`
+
+The write-safety layer. Before any write operation:
+
+1. Parses the A1 range into a structured footprint (`startRowIndex`, `endRowIndex`, `startColumnIndex`, `endColumnIndex`)
+2. Fetches the target range in `FORMULA` render mode
+3. Detects formula cells and ARRAYFORMULA spill risks
+4. Throws a structured, human-readable error if a destructive write is detected
+5. Optionally bypassed with `allowFormulaOverwrite: true`
+
+### `lib/db.ts` — Supabase pg pool
+
+Used by `analyze_range` and `transform_range` to execute Postgres SQL against sheet data loaded into a JSONB temporary schema. Also used for schema caching (`sheet_snapshots` table, 300-second TTL).
+
+---
+
+## Deployment
+
+sheets-mcp deploys directly to **Vercel** via CLI (`vercel --prod`). There is no GitHub ↔ Vercel integration — deploys are triggered manually.
+
+Required environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `BETTER_AUTH_SECRET` | HMAC signing key for sessions |
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 client ID |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 client secret |
+| `DATABASE_URL` | Supabase Postgres connection string |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+
+<Warning>
+  `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` must be set even if Supabase SSR middleware is not in use. The edge runtime will throw a 500 if these are missing.
+</Warning>
