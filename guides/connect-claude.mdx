@@ -6,7 +6,7 @@ description: "Step-by-step guide to wiring sheets-mcp into Claude Desktop via OI
 ## Prerequisites
 
 - [Claude Desktop](https://claude.ai/download) installed (macOS or Windows)
-- A sheets-mcp account at [sheets-mcp.vercel.app](https://sheets-mcp.vercel.app)
+- A sheets-mcp account at [sheets-mcp-xi.vercel.app](https://sheets-mcp-xi.vercel.app)
 
 ---
 
@@ -34,27 +34,34 @@ description: "Step-by-step guide to wiring sheets-mcp into Claude Desktop via OI
     {
       "mcpServers": {
         "sheets-mcp": {
-          "url": "https://sheets-mcp.vercel.app/api/mcp"
+          "url": "https://sheets-mcp-xi.vercel.app/api/mcp"
         }
       }
     }
     ```
 
-    If you already have other MCP servers configured, add `sheets-mcp` as a new key inside `mcpServers`.
+    If you already have other MCP servers, add `sheets-mcp` as a new key inside `mcpServers`.
 
   </Step>
 
   <Step title="Restart Claude Desktop">
 
-    Fully quit and relaunch Claude Desktop. On restart, Claude detects the new MCP server and initiates the auth handshake.
+    Fully quit and relaunch Claude Desktop. On restart, Claude detects the new MCP server and initiates the OIDC auth handshake — it discovers the authorization endpoint from `/.well-known/oauth-authorization-server` automatically.
 
   </Step>
 
   <Step title="Complete Google OAuth consent">
 
-    Claude will open a browser window pointing to `sheets-mcp.vercel.app/authorize`. Sign in with your Google account and grant the Drive and Sheets scopes.
+    Claude opens a browser window to `sheets-mcp-xi.vercel.app/authorize`. The consent screen shows:
+    - The requesting client name ("Claude" or "An AI Assistant")
+    - Your currently signed-in Google account email
+    - The exact permissions being granted (Sheets read/write, Drive read)
 
-    Once consent is complete, the browser redirects back and the modal closes automatically (the authorize page polls every 2 seconds for provisioning confirmation).
+    Click **Allow**. The browser redirects back and Claude closes the window automatically.
+
+    <Note>
+      You can switch Google accounts from this screen by clicking **Switch account?** — sheets-mcp will sign you out and redirect back through the login flow with the new account.
+    </Note>
 
   </Step>
 
@@ -74,12 +81,12 @@ description: "Step-by-step guide to wiring sheets-mcp into Claude Desktop via OI
 
 ## Switching Google accounts
 
-1. Go to [sheets-mcp.vercel.app/dashboard](https://sheets-mcp.vercel.app/dashboard)
+1. Go to [sheets-mcp-xi.vercel.app/dashboard](https://sheets-mcp-xi.vercel.app/dashboard)
 2. Click **Sign out**
 3. Restart Claude Desktop
-4. Repeat the OAuth consent flow with the new account
+4. Complete the OAuth consent flow with the new account
 
-sheets-mcp uses `prompt: "select_account consent"` on the Google OAuth screen — the account picker is always shown, preventing silent reuse of a cached session.
+sheets-mcp uses `prompt: "select_account consent"` on the Google OAuth screen — the account picker is always shown.
 
 ---
 
@@ -87,7 +94,8 @@ sheets-mcp uses `prompt: "select_account consent"` on the Google OAuth screen �
 
 | Symptom | Fix |
 |---|---|
-| `list_all_sheets` returns `[]` | Auth handshake not completed. Restart Claude and re-authorize. |
-| Tools not appearing in Claude | Check that `claude_desktop_config.json` is valid JSON. Use a JSON validator. |
-| Google consent screen not opening | Check your firewall or browser default — Claude opens the system default browser. |
-| `401 Unauthorized` on all tool calls | Your refresh token was revoked. Sign out from the dashboard and re-authorize. |
+| `list_spreadsheets` returns `[]` | Auth handshake not completed. Restart Claude and re-authorize. |
+| Tools not appearing in Claude | Check that `claude_desktop_config.json` is valid JSON — use [jsonlint.com](https://jsonlint.com). |
+| Google consent screen not opening | Claude opens the system default browser. Check your default browser setting. |
+| `needsAuth: true` in tool response | Refresh token was revoked. Sign out from the dashboard and re-authorize. |
+| Dashboard shows "Connect Google Account" banner | You signed in with email+password but haven't linked Google yet. Click the banner. |
