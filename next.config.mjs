@@ -1,10 +1,11 @@
 import nextra from 'nextra'
 
-const withNextra = nextra({
-  contentDirBasePath: '/',
-})
+const withNextra = nextra()
 
-export default withNextra({
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
   images: { unoptimized: true },
-})
+}
+
+export default withNextra(nextConfig)
