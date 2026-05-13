@@ -48,7 +48,11 @@
     },
     {
       "group": "Concepts",
-      "pages": ["concepts/architecture", "concepts/safety"]
+      "pages": [
+        "concepts/architecture",
+        "concepts/safety",
+        "concepts/database"
+      ]
     },
     {
       "group": "Tools",
@@ -66,12 +70,18 @@
       "pages": [
         "guides/connect-claude",
         "guides/connect-cursor",
-        "guides/sql-in-sheets"
+        "guides/sql-in-sheets",
+        "guides/self-deploy"
       ]
     },
     {
       "group": "Reference",
-      "pages": ["reference/errors", "changelog"]
+      "pages": [
+        "reference/errors",
+        "reference/glossary",
+        "reference/roadmap",
+        "changelog"
+      ]
     }
   ],
   "footerSocials": {
