@@ -1,0 +1,92 @@
+---
+title: "Read Tools"
+description: "list_spreadsheets, list_sheets, read_range — fetch data from Google Sheets."
+---
+
+## `list_spreadsheets`
+
+Lists all spreadsheets in the authenticated user's Google Drive.
+
+**No parameters required.**
+
+```json
+// Response example
+[
+  {
+    "id": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms",
+    "name": "Q2 2026 Budget",
+    "createdTime": "2026-04-01T09:00:00.000Z",
+    "modifiedTime": "2026-05-10T14:32:00.000Z"
+  }
+]
+```
+
+<Tip>
+  Use `list_spreadsheets` first to discover spreadsheet IDs before calling `read_range` or `write_range`. Agents should not ask users to copy-paste spreadsheet IDs manually.
+</Tip>
+
+---
+
+## `list_sheets`
+
+Lists all tabs (worksheets) inside a specific spreadsheet.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | The spreadsheet ID from Drive |
+
+```json
+// Response example
+[
+  { "sheetId": 0, "title": "Sheet1", "index": 0 },
+  { "sheetId": 812345678, "title": "Revenue", "index": 1 }
+]
+```
+
+<Note>
+  `sheetId` (a number) and `title` (a string) are both returned. `format_cells`, `manage_sheets`, `copy_sheet`, and `batch_update_sheet` require `sheetId`. `read_range` and `write_range` use `title` in A1 notation (e.g. `Revenue!A1:D10`).
+</Note>
+
+---
+
+## `read_range`
+
+Reads values from a sheet range and returns a 2D array of cell values. Empty cells are returned as empty strings.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | — | The spreadsheet ID |
+| `range` | `string` | ✅ | — | A1 notation, e.g. `Sheet1!A1:D10` |
+| `renderOption` | `enum` | ❌ | `FORMATTED_VALUE` | How cell values are rendered |
+
+### `renderOption` values
+
+| Value | Returns |
+|---|---|
+| `FORMATTED_VALUE` | What the user sees (e.g. `$1,234.00`, `45%`) |
+| `UNFORMATTED_VALUE` | Raw underlying value (e.g. `1234`, `0.45`) |
+| `FORMULA` | The formula string (e.g. `=SUM(A1:A10)`) |
+
+### Schema injection
+
+`read_range` automatically attaches `_schema` to the response — a compact snapshot of the sheet's layout, conditional formats, protected ranges, and ARRAYFORMULA columns. This gives the agent structural context without a separate `get_sheet_metadata` call.
+
+```json
+{
+  "values": [["Name", "Revenue"], ["Acme", "12000"]],
+  "_schema": {
+    "layout": { "frozenRows": 1, "frozenColumns": 0 },
+    "arrayFormulaColumns": ["C"],
+    "warnings": ["⚠️ Column C contains ARRAYFORMULA — do not write to C2:C"]
+  }
+}
+```
+
+### Response size limit
+
+`read_range` is capped at **1,000 rows or 2 MB**. If your range exceeds this, use [`analyze_range`](/tools/analyze#analyze_range) with SQL to aggregate before reading.
+
+```
+⚠️ read_range: Truncated to 1000 rows (original: 4821).
+Use a narrower A1 range or analyze_range with SQL for large datasets.
+```
