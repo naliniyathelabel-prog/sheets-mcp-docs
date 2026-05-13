@@ -1,2 +1,2 @@
 name = "sheets-mcp-docs"
-pages_build_output_dir = ".mintlify/dist"
+pages_build_output_dir = "out"
