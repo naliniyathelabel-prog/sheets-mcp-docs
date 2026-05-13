@@ -25,7 +25,7 @@ The virtual table name used inside `analyze_range` and `transform_range` SQL que
 
 ```sql
 -- You write:
-SELECT data->>'Region', SUM((data->>'Revenue')::numeric)
+SELECT data → >'Region', SUM((data → >'Revenue')::numeric)
 FROM sheet_data GROUP BY 1
 
 -- sheets-mcp wraps it as:
@@ -51,7 +51,7 @@ The sheet structure object returned alongside data in `read_range` and `analyze_
     { "range": { "startRowIndex": 0, "endRowIndex": 1 }, "warningOnly": false, "description": "Header row" }
   ],
   "arrayFormulaColumns": ["C"],
-  "warnings": ["⚠️ Column C contains ARRAYFORMULA — do not write to C2:C"],
+  "warnings": ["⚠ Column C contains ARRAYFORMULA — do not write to C2:C"],
   "mergedTitleRows": [],
   "constraints": []
 }
