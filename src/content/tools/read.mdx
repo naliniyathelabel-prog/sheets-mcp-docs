@@ -34,7 +34,7 @@ Lists all tabs (worksheets) inside a spreadsheet, with their numeric `sheetId` a
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `spreadsheetId` | `string` | ✅ | The spreadsheet to inspect |
+| `spreadsheetId` | `string` | ✓ | The spreadsheet to inspect |
 
 ```json
 // Response — array of sheet tab objects
@@ -45,7 +45,7 @@ Lists all tabs (worksheets) inside a spreadsheet, with their numeric `sheetId` a
 ]
 ```
 
-> **💡 Tip**
+**Tip:**
 >
 > Always call `list_sheets` before using `format_cells`, `copy_sheet`, `manage_sheets` (rename/delete), or `batch_update_sheet` — these tools require the numeric `sheetId`, not the tab name string.
 
@@ -58,9 +58,9 @@ Reads a 2D array of cell values from a range, along with the sheet's structural 
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `spreadsheetId` | `string` | ✅ | — | Target spreadsheet |
-| `range` | `string` | ✅ | — | A1 notation, e.g. `Sheet1!A1:D10` |
-| `renderOption` | `enum` | ❌ | `FORMATTED_VALUE` | How values are rendered (see below) |
+| `spreadsheetId` | `string` | ✓ | — | Target spreadsheet |
+| `range` | `string` | ✓ | — | A1 notation, e.g. `Sheet1!A1:D10` |
+| `renderOption` | `enum` | ✗ | `FORMATTED_VALUE` | How values are rendered (see below) |
 
 ### `renderOption` values
 
@@ -86,7 +86,7 @@ Reads a 2D array of cell values from a range, along with the sheet's structural 
     "semantics": ["Has 3 conditional format rules"],
     "protectedRanges": [],
     "arrayFormulaColumns": ["C"],
-    "warnings": ["⚠️ Column C contains ARRAYFORMULA — do not write to C2:C"],
+    "warnings": ["⚠ Column C contains ARRAYFORMULA — do not write to C2:C"],
     "mergedTitleRows": [],
     "constraints": []
   }
@@ -100,7 +100,7 @@ Reads a 2D array of cell values from a range, along with the sheet's structural 
 If the response exceeds **1,000 rows** or **2 MB**, the result is truncated and a warning is appended:
 
 ```
-⚠️ read_range: Truncated to 1000 rows (original: 14823).
+⚠ read_range: Truncated to 1000 rows (original: 14823).
 Use a narrower A1 range or analyze_range with SQL for large datasets.
 ```
 
@@ -115,7 +115,5 @@ Sheet1!1:1          — entire row 1 (header row only)
 'My Sheet'!A1:Z100  — sheet name with spaces (single-quoted)
 ```
 
-> **⚠️ Warning**
->
-> Always qualify the range with the sheet name (`Sheet1!A1`). Without the sheet name prefix, the Sheets API defaults to the first tab, which may not be what you expect.
+**Warning:** Always qualify the range with the sheet name (`Sheet1!A1`). Without the sheet name prefix, the Sheets API defaults to the first tab, which may not be what you expect.
 
