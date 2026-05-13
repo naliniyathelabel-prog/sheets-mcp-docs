@@ -58,9 +58,7 @@ MCP Client (Claude / Cursor)
 > **Session persistence.** Once consented, `better-auth` stores the session and Google OAuth token in Supabase. Reconnecting (e.g. restarting Claude Desktop) reuses the stored session with no re-consent — unless the Google refresh token was revoked.
 
 
-> **⚠️ Warning**
->
-> **Account switching.** sheets-mcp uses `prompt: "select_account consent"` on Google OAuth. This forces the account picker every time, so users can always switch accounts by signing out from the dashboard first.
+**Warning:** **Account switching.** sheets-mcp uses `prompt: "select_account consent"` on Google OAuth. This forces the account picker every time, so users can always switch accounts by signing out from the dashboard first.
 
 
 ---
@@ -93,7 +91,7 @@ For MCP clients that support custom headers:
 
 API keys are managed by `better-auth`'s `apiKey` plugin with `enableSessionForAPIKeys: true` — they resolve to the same user context as OIDC, including the same Google OAuth token.
 
-> **💡 Tip**
+**Tip:**
 >
 > API keys have no built-in expiry unless you set one during creation. Name your keys clearly (e.g. "CI pipeline", "Cursor headless") so you can revoke individual keys without affecting others.
 
