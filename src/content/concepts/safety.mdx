@@ -41,21 +41,19 @@ Compares the write footprint (computed from the actual `values[][]` array dimens
 | Protection type | Behaviour |
 |---|---|
 | `warningOnly: false` (strict lock) | **Write blocked.** Returns `"Write blocked — range overlaps a Protected Range (locked). This cannot be overridden."` |
-| `warningOnly: true` (soft warning) | Write proceeds. `_warnings` array added to response: `"⚠️ Target range has a user-set protection warning."` |
+| `warningOnly: true` (soft warning) | Write proceeds. `_warnings` array added to response: `"⚠ Target range has a user-set protection warning."` |
 
 ### ARRAYFORMULA column guard
 
 Checks if any column in the write footprint matches an ARRAYFORMULA anchor column (detected from row 2 formulas in the schema cache). If a match is found and `allowFormulaOverwrite` is `false`:
 
 ```
-⚠️ A target column contains an ARRAYFORMULA. Writing static values will
+⚠ A target column contains an ARRAYFORMULA. Writing static values will
 permanently destroy this formula. Pass allowFormulaOverwrite: true to confirm
 you intend to replace the formula with static data.
 ```
 
-> **⚠️ Warning**
->
-> The ARRAYFORMULA guard checks **column overlap only**, not cell overlap. If any cell in the target range shares a column with an ARRAYFORMULA anchor in row 2, the write is blocked. This is intentionally conservative.
+**Warning:** The ARRAYFORMULA guard checks **column overlap only**, not cell overlap. If any cell in the target range shares a column with an ARRAYFORMULA anchor in row 2, the write is blocked. This is intentionally conservative.
 
 
 ### What `_schema` looks like (returned by `read_range`)
@@ -73,7 +71,7 @@ you intend to replace the formula with static data.
       { "range": { "startRowIndex": 0, "endRowIndex": 1 }, "warningOnly": false, "description": "Header row" }
     ],
     "arrayFormulaColumns": ["C"],
-    "warnings": ["⚠️ Column C contains ARRAYFORMULA — do not write to C2:C"],
+    "warnings": ["⚠ Column C contains ARRAYFORMULA — do not write to C2:C"],
     "mergedTitleRows": []
   }
 }
@@ -100,7 +98,7 @@ Applied before the query reaches Postgres:
 
 > **Note**
 >
-> The strip is designed not to break column names that contain blocked words. E.g. `data->>'Dropoff Time'` is safe — the UNION/DELETE stripping targets full keywords, not substrings inside string literals.
+> The strip is designed not to break column names that contain blocked words. E.g. `data → >'Dropoff Time'` is safe — the UNION/DELETE stripping targets full keywords, not substrings inside string literals.
 
 
 ### Transaction sandbox (Postgres layer)
@@ -141,7 +139,7 @@ Even if the regex guard is bypassed and a Data-Modifying CTE is constructed, Pos
 When truncation occurs, a second content item is added to the MCP response:
 
 ```
-⚠️ read_range: Truncated to 1000 rows (original: 14823).
+⚠ read_range: Truncated to 1000 rows (original: 14823).
 Use a narrower A1 range or analyze_range with SQL for large datasets.
 ```
 
