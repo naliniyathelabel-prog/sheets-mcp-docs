@@ -14,52 +14,37 @@ description: "All notable changes to sheets-mcp, newest first."
 
 ### Added
 
-<details>
-<summary>**append_rows — non-destructive row insertion**</summary>
+### append_rows — non-destructive row insertion
 
 Appends 2D string arrays into existing ranges using `insertDataOption: INSERT_ROWS`. Unlike `write_range`, it never overwrites existing rows — it finds the bottom of the data table and inserts below it.
 
     **AX impact:** Agents can now safely add rows to a live table without knowing the current row count. No need to `read_range` first to find the last row.
 
-</details>
-
-<details>
-<summary>**clear_range — value wipe, formatting preserved**</summary>
+### clear_range — value wipe, formatting preserved
 
 Clears cell values in a bounding box while explicitly preserving all formatting, data validation rules, and conditional formatting.
 
     **AX impact:** Agents can reset data in a template sheet without destroying the visual structure the user has set up.
 
-</details>
-
-<details>
-<summary>**copy_sheet — tab duplication**</summary>
+### copy_sheet — tab duplication
 
 Duplicates an existing worksheet tab into a new spreadsheet using `spreadsheets.sheets.copyTo`. Returns the new sheet's ID.
 
     **AX impact:** Enables template workflows — copy a formatted report tab, then populate it with `write_range`.
 
-</details>
-
-<details>
-<summary>**batch_update_sheet — full batchUpdate passthrough**</summary>
+### batch_update_sheet — full batchUpdate passthrough
 
 Raw proxy for the Google Sheets `batchUpdate` endpoint. Accepts an array of any `batchUpdate` request objects — charts, merges, dimension resize, conditional formatting, data validation, and more.
 
     **AX impact:** Exposes the full structural API surface that was previously inaccessible through single-purpose tools. Agents can now build charts and apply rich formatting in a single round-trip.
 
-</details>
-
-<details>
-<summary>**analyze_range — context pagination protection (SQL engine)**</summary>
+### analyze_range — context pagination protection (SQL engine)
 
 The primary defence against LLM token context exhaustion. Fetches raw sheet data via Sheets REST API, loads it into a Postgres JSONB CTE (`sheet_data`), executes native SQL aggregations, and returns only the result to the agent context.
 
     The fetch result is cached in Supabase (`sheet_snapshots`) for **60 seconds** — repeated calls within the window skip the Sheets API entirely.
 
     **AX impact:** Agents can now summarise, aggregate, and filter datasets of any size without a single raw row entering the context window.
-
-</details>
 
 ### Changed
 
