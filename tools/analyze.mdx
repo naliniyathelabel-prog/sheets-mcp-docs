@@ -1,0 +1,132 @@
+---
+title: "Analyze Tools"
+description: "analyze_range and transform_range — run Postgres SQL directly against sheet data."
+---
+
+The SQL engine is sheets-mcp's most powerful capability. Instead of pulling thousands of rows into the agent context and asking the LLM to aggregate them, `analyze_range` and `transform_range` push the computation down into **Postgres** — only the aggregated result enters the context.
+
+---
+
+## How it works
+
+```
+Agent calls analyze_range(spreadsheetId, range, query)
+    │
+    ├── Sheets API fetches raw range data (JSON)
+    │
+    ├── Data loaded into Postgres JSONB temp schema
+    │       CTE: "sheet_data" with column "data" (JSONB)
+    │       Each row = one JSONB object keyed by header
+    │
+    ├── SQL query executed (READ ONLY, LIMIT 1000 enforced)
+    │
+    └── Aggregated result → agent context
+```
+
+This pattern keeps the agent context clean regardless of sheet size.
+
+---
+
+## `analyze_range`
+
+Read-only SQL engine. Fetches a range, runs your `SELECT` through Postgres, returns the result.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | Target spreadsheet |
+| `range` | `string` | ✅ | A1 range to load as table |
+| `query` | `string` | ✅ | Postgres SQL `SELECT` statement |
+
+### The `sheet_data` CTE
+
+Your query runs against a CTE named `sheet_data` with a single `JSONB` column named `data`. Each row corresponds to one sheet row (after the header), with column headers as keys.
+
+```sql
+-- Count rows by category
+SELECT data->>'Category' AS category, COUNT(*) AS total
+FROM sheet_data
+GROUP BY category
+ORDER BY total DESC
+```
+
+### Inspecting headers
+
+If you're not sure what the header keys look like (spaces, special characters, mixed case), inspect them first:
+
+```sql
+SELECT jsonb_object_keys(data) AS header
+FROM sheet_data
+LIMIT 50
+```
+
+Then reference the exact key:
+
+```sql
+SELECT data->>'SUBCATEGORY by formula' AS subcategory
+FROM sheet_data
+```
+
+Check for hidden whitespace:
+
+```sql
+SELECT data ? 'SUBCATEGORY by formula' AS key_exists
+FROM sheet_data
+LIMIT 5
+```
+
+### Example — revenue summary
+
+```sql
+SELECT
+  data->>'Region' AS region,
+  SUM((data->>'Revenue')::numeric) AS total_revenue,
+  AVG((data->>'Revenue')::numeric) AS avg_deal
+FROM sheet_data
+WHERE data->>'Status' = 'Closed Won'
+GROUP BY region
+ORDER BY total_revenue DESC
+```
+
+### Safety
+
+- All queries run inside `BEGIN READ ONLY` — Postgres rejects any mutation
+- `;` is stripped before execution (blocks statement chaining)
+- `DROP`, `DELETE`, `UNION` are rejected before execution
+- `LIMIT 1000` is appended automatically to every query
+
+---
+
+## `transform_range`
+
+Write-enabled SQL engine. Reads a range, runs your `SELECT`, writes the results **back to the same range**.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `spreadsheetId` | `string` | ✅ | — | Target spreadsheet |
+| `range` | `string` | ✅ | — | Range to read and write back |
+| `query` | `string` | ✅ | — | SQL `SELECT` that produces the new values |
+| `allowFormulaOverwrite` | `boolean` | ❌ | `false` | Bypass formula protection on write-back |
+
+### Use cases
+
+- Clean and normalise messy data in-place (trim whitespace, fix capitalisation)
+- Derive new columns from existing data without pulling rows to the client
+- Deduplicate rows using `ROW_NUMBER()` window functions
+
+### Example — normalise city names
+
+```sql
+SELECT
+  data->>'Date' AS date,
+  INITCAP(TRIM(data->>'City')) AS city,
+  (data->>'Revenue')::numeric AS revenue
+FROM sheet_data
+```
+
+<Warning>
+  `transform_range` overwrites the source range with SQL output. It runs the same [formula safety checks](/concepts/safety) as `write_range`. The write is blocked if any cell in the range contains a formula, unless `allowFormulaOverwrite: true` is set.
+</Warning>
+
+<Tip>
+  Use `analyze_range` to preview the SQL output before running `transform_range`. They use the same query engine — `analyze_range` reads only, `transform_range` reads then writes.
+</Tip>
