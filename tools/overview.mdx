@@ -1,69 +1,86 @@
 ---
 title: "Tools Overview"
-description: "All 15 MCP tools, design principles, and the 2026 MCP spec features used."
+description: "14 tools. Exact names, descriptions, and design principles. Source: route.ts."
+---
+
+sheets-mcp exposes **14 tools** across five categories. Every tool name, description, and parameter in this documentation is sourced directly from the Zod schemas in `route.ts`.
+
+---
+
+## Tool surface
+
+| Tool | Category | Description |
+|---|---|---|
+| `list_spreadsheets` | Read | List all spreadsheets in Drive |
+| `list_sheets` | Read | List tabs in a spreadsheet |
+| `read_range` | Read | Read a range — returns values + `_schema` |
+| `write_range` | Write | Write a 2D array to a specific range |
+| `append_rows` | Write | Append rows to the bottom of an existing table |
+| `clear_range` | Write | Clear values in a range (keeps formatting) |
+| `format_cells` | Write | Apply visual formatting using zero-based grid indexes |
+| `analyze_range` | SQL | Execute Postgres SQL on a range — read-only |
+| `transform_range` | SQL | Read → SQL transform → write back in-place |
+| `create_spreadsheet` | Manage | Create a new blank spreadsheet |
+| `manage_sheets` | Manage | Add, rename, or delete tabs via the REST API |
+| `copy_sheet` | Manage | Copy a tab to another spreadsheet |
+| `batch_update_sheet` | Manage | Structural updates: charts, merges, formatting |
+| `restore_snapshot` | Manage | List and restore pre-write snapshots |
+| `manage_drive` | Drive | Search Drive files, convert to Spreadsheets |
+
 ---
 
 ## Design principles
 
-sheets-mcp's tool surface was designed against three constraints:
+### 1. Fail-closed writes
 
-1. **Context window budget** — Every tool schema token costs inference budget. The full schema payload was optimised from ~760 tokens down to ~450 tokens (41% reduction) by trimming redundant descriptions and `z.describe` attributes on self-evident fields.
-2. **Sheets API cost** — The Sheets API charges per HTTP request. Tools prefer batch operations (`batch_update_sheet`, `append_rows` with `INSERT_ROWS`) over sequential single-cell writes.
-3. **Agent ergonomics** — Tool names and parameter names follow the principle of least surprise. Overlapping operations are merged (e.g. `delete_sheet` + `add_sheet` + `rename_sheet` → `manage_sheets`).
+All write tools (`write_range`, `append_rows`, `transform_range`) block by default if the target range contains formulas or overlaps a strict Protected Range. Agents must pass `allowFormulaOverwrite: true` to explicitly override. This is intentional — it prevents agents from silently destroying formulas.
 
-### 2026 MCP spec features used
+### 2. AX over raw data transfer
 
-| Feature | How sheets-mcp uses it |
-|---|---|
-| **Tool Output Schemas** (June 2025 spec) | Every tool declares its return shape to reduce context waste |
-| **Structured errors** | All errors return `{ code, message, details }` — never raw stack traces |
-| **Batch-first** | `batch_update_sheet` covers the full `batchUpdate` surface in one round-trip |
-| **Data-in-place operations** | `analyze_range` and `transform_range` run SQL inside Postgres — sheet data never enters the agent context |
+`analyze_range` and `transform_range` exist specifically to keep raw tabular data **out of the agent context window**. An agent should never `read_range` on a large dataset just to compute a sum — that's what `analyze_range` is for.
 
----
+### 3. Schema always co-delivered
 
-## All 15 tools
+`read_range` returns `_schema` alongside values in every response. `analyze_range` returns `_schema` alongside query results. Agents have structural sheet information without a separate tool call.
 
-| # | Tool | Category | Description |
-|---|---|---|---|
-| 1 | [`list_spreadsheets`](/tools/read#list_spreadsheets) | Read | List all spreadsheets in Drive |
-| 2 | [`list_sheets`](/tools/read#list_sheets) | Read | List tabs inside a spreadsheet |
-| 3 | [`read_range`](/tools/read#read_range) | Read | Read a 2D cell range |
-| 4 | [`write_range`](/tools/write#write_range) | Write | Overwrite a specific range |
-| 5 | [`append_rows`](/tools/write#append_rows) | Write | Append rows to the bottom of a table |
-| 6 | [`clear_range`](/tools/write#clear_range) | Write | Clear values, keep formatting |
-| 7 | [`format_cells`](/tools/write#format_cells) | Write | Apply visual formatting |
-| 8 | [`analyze_range`](/tools/analyze#analyze_range) | Analyze | Read-only SQL on sheet data |
-| 9 | [`transform_range`](/tools/analyze#transform_range) | Analyze | SQL → write results back to sheet |
-| 10 | [`create_spreadsheet`](/tools/manage#create_spreadsheet) | Manage | Create a new spreadsheet |
-| 11 | [`manage_sheets`](/tools/manage#manage_sheets) | Manage | Add / rename / delete tabs |
-| 12 | [`copy_sheet`](/tools/manage#copy_sheet) | Manage | Copy a tab to another spreadsheet |
-| 13 | [`batch_update_sheet`](/tools/manage#batch_update_sheet) | Manage | Raw batchUpdate passthrough |
-| 14 | [`restore_snapshot`](/tools/manage#restore_snapshot) | Manage | Restore cached sheet snapshot |
-| 15 | [`manage_drive`](/tools/drive#manage_drive) | Drive | Search files and convert to Sheets |
+### 4. Undo is always available
+
+Every `write_range` and `transform_range` call saves a `before_values` snapshot to `write_history` (≤ 1,000 rows). `restore_snapshot` can list and apply these snapshots.
+
+### 5. 41% schema token savings (v1.1.0)
+
+The Zod tool schemas were aggressively trimmed in v1.1.0 — removing redundant `z.describe()` attributes on self-evident fields. Total schema context load dropped from ~760 tokens to ~450 tokens per tool call. This directly increases agent reasoning budget per invocation.
 
 ---
 
-## Rate limits
+## MCP tool call anatomy
 
-The underlying Google Sheets API enforces **60 read/write requests per minute per user**. sheets-mcp does not add its own rate limit layer on top of this (scheduled for a future release). If you exceed the Google quota, tools return a structured `429` error with a retry hint.
-
----
-
-## Error format
-
-All tool errors follow a consistent shape:
+Every tool response uses the standard MCP content envelope:
 
 ```json
 {
-  "content": [
-    {
-      "type": "text",
-      "text": "{ \"code\": \"PERMISSION_DENIED\", \"message\": \"The caller does not have permission\", \"details\": {} }"
-    }
-  ],
-  "isError": true
+  "content": [{
+    "type": "text",
+    "text": "{ ... JSON result ... }"
+  }]
 }
 ```
 
-See the [Error Reference](/reference/errors) for the full list of error codes.
+Errors add `"isError": true` and may include `"needsAuth": true` for expired OAuth sessions. See the [Error Reference](/reference/errors) for the full error catalogue.
+
+---
+
+## AX tool selection guide
+
+| Situation | Right tool | Wrong tool |
+|---|---|---|
+| Need to see what spreadsheets exist | `list_spreadsheets` | — |
+| Need tab names + numeric IDs | `list_sheets` | — |
+| Preview sheet structure + small data | `read_range` | — |
+| Aggregate 500+ rows | `analyze_range` | `read_range` |
+| Reformat/enrich data in-place | `transform_range` | `read_range` → LLM → `write_range` |
+| Add rows without overwriting | `append_rows` | `write_range` |
+| Undo a write | `restore_snapshot` | Rewriting manually |
+| Find a file in Drive | `manage_drive` search | `list_spreadsheets` (won't find CSVs) |
+| Convert uploaded CSV to Sheets | `manage_drive` convert | — |
+| Apply chart/merge/validation | `batch_update_sheet` | — |
