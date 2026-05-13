@@ -50,9 +50,7 @@ JSONB objects:
 { "Name": "Globex", "Revenue": "8500",  "Region": "North" }
 ```
 
-> **⚠️ Warning**
->
-> All values in `data` are **strings** — even numbers. Always cast before arithmetic: `(data->>'Revenue')::numeric`
+**Warning:** All values in `data` are **strings** — even numbers. Always cast before arithmetic: `(data → >'Revenue')::numeric`
 
 
 ---
@@ -77,12 +75,12 @@ This prevents null results from silent key mismatches like `'Revenue '` vs `'Rev
 
 ```sql
 SELECT
-  data->>'Region' AS region,
+  data → >'Region' AS region,
   COUNT(*)::int AS deals,
-  SUM((data->>'Revenue')::numeric) AS total_revenue,
-  ROUND(AVG((data->>'Revenue')::numeric), 2) AS avg_deal
+  SUM((data → >'Revenue')::numeric) AS total_revenue,
+  ROUND(AVG((data → >'Revenue')::numeric), 2) AS avg_deal
 FROM sheet_data
-WHERE data->>'Status' = 'Closed Won'
+WHERE data → >'Status' = 'Closed Won'
 GROUP BY region
 ORDER BY total_revenue DESC
 ```
@@ -90,16 +88,16 @@ ORDER BY total_revenue DESC
 ### Filter rows
 
 ```sql
-SELECT data->>'Name', data->>'Revenue', data->>'Due Date'
+SELECT data → >'Name', data → >'Revenue', data → >'Due Date'
 FROM sheet_data
-WHERE (data->>'Revenue')::numeric > 10000
-  AND data->>'Status' != 'Cancelled'
+WHERE (data → >'Revenue')::numeric > 10000
+  AND data → >'Status' != 'Cancelled'
 ```
 
 ### Find duplicates
 
 ```sql
-SELECT data->>'Email' AS email, COUNT(*) AS occurrences
+SELECT data → >'Email' AS email, COUNT(*) AS occurrences
 FROM sheet_data
 GROUP BY email
 HAVING COUNT(*) > 1
@@ -110,9 +108,9 @@ ORDER BY occurrences DESC
 
 ```sql
 SELECT
-  data->>'Date' AS date,
-  (data->>'Amount')::numeric AS amount,
-  SUM((data->>'Amount')::numeric) OVER (ORDER BY data->>'Date') AS running_total
+  data → >'Date' AS date,
+  (data → >'Amount')::numeric AS amount,
+  SUM((data → >'Amount')::numeric) OVER (ORDER BY data → >'Date') AS running_total
 FROM sheet_data
 ```
 
@@ -120,12 +118,12 @@ FROM sheet_data
 
 ```sql
 SELECT
-  data->>'Name' AS name,
-  (data->>'Score')::numeric AS score,
+  data → >'Name' AS name,
+  (data → >'Score')::numeric AS score,
   CASE
-    WHEN (data->>'Score')::numeric >= 90 THEN 'A'
-    WHEN (data->>'Score')::numeric >= 75 THEN 'B'
-    WHEN (data->>'Score')::numeric >= 60 THEN 'C'
+    WHEN (data → >'Score')::numeric >= 90 THEN 'A'
+    WHEN (data → >'Score')::numeric >= 75 THEN 'B'
+    WHEN (data → >'Score')::numeric >= 60 THEN 'C'
     ELSE 'F'
   END AS grade
 FROM sheet_data
@@ -143,7 +141,7 @@ Use when you need **insight without mutation**. Results go to the agent only —
   "tool": "analyze_range",
   "spreadsheetId": "1BxiMVs0XRA...",
   "range": "Sheet1!A:F",
-  "query": "SELECT data->>'Region' AS region, SUM((data->>'Revenue')::numeric) AS total FROM sheet_data GROUP BY region ORDER BY total DESC"
+  "query": "SELECT data → >'Region' AS region, SUM((data → >'Revenue')::numeric) AS total FROM sheet_data GROUP BY region ORDER BY total DESC"
 }
 ```
 
@@ -160,7 +158,7 @@ Use when you need to **mutate the sheet data in-place** using SQL logic. The age
   "tool": "transform_range",
   "spreadsheetId": "1BxiMVs0XRA...",
   "range": "Sheet1!A:D",
-  "query": "SELECT data->>'Date', INITCAP(TRIM(data->>'Name')), (data->>'Revenue')::numeric * 1.1, data->>'Region' FROM sheet_data"
+  "query": "SELECT data → >'Date', INITCAP(TRIM(data → >'Name')), (data → >'Revenue')::numeric * 1.1, data → >'Region' FROM sheet_data"
 }
 ```
 
@@ -185,7 +183,7 @@ Use when you need to **mutate the sheet data in-place** using SQL logic. The age
 
 ## AX anti-patterns to avoid
 
-| ❌ Anti-pattern | ✅ Correct approach |
+| ✗ Anti-pattern | ✓ Correct approach |
 |---|---|
 | `read_range` on 10k+ rows then summarise in LLM | `analyze_range` with SQL GROUP BY |
 | Multiple sequential `analyze_range` calls for the same range | One query with multiple CTEs or subqueries |
