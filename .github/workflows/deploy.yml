@@ -1,37 +1,31 @@
-name: Deploy to GitHub Pages
+name: Deploy to Vercel
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
 
-      - name: Install Mintlify CLI
-        run: npm install -g mintlify@latest
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Build docs
-        run: mintlify build
-        # Outputs static site to .mintlify/dist/
+      - name: Build
+        run: npm run build
 
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .mintlify/dist
-          force_orphan: true
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: "--prod"
