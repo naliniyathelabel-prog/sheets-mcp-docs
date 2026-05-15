@@ -10,34 +10,32 @@ description: "Add sheets-mcp to Cursor IDE using the MCP settings panel or mcp.j
 
 ---
 
-### Step 1 — Open Cursor MCP settings
-Go to **Cursor → Settings → Features → MCP Servers**.
+1. **Open Cursor MCP settings.**
+Go to **Cursor → Settings → Features → MCP Servers**. Or open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search **MCP: Add Server**.
 
-    Or open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and search **MCP: Add Server**.
-
-### Step 2 — Add a new MCP server
+2. **Add a new MCP server.**
 Click **Add new MCP server** and enter:
 
-    - **Name:** `sheets-mcp`
-    - **URL:** `https://sheets-mcp-xi.vercel.app/api/mcp`
-    - **Transport:** Auto (Cursor negotiates SSE or HTTP automatically)
+- **Name:** `sheets-mcp`
+- **URL:** `https://sheets-mcp-xi.vercel.app/api/mcp`
+- **Transport:** Auto (Cursor negotiates SSE or HTTP automatically)
 
-    Or edit `~/.cursor/mcp.json` directly:
+Or edit `~/.cursor/mcp.json` directly:
 
-    ```json
-    {
-      "mcpServers": {
-        "sheets-mcp": {
-          "url": "https://sheets-mcp-xi.vercel.app/api/mcp"
-        }
-      }
+```json
+{
+  "mcpServers": {
+    "sheets-mcp": {
+      "url": "https://sheets-mcp-xi.vercel.app/api/mcp"
     }
-    ```
+  }
+}
+```
 
-### Step 3 — Reload Cursor
+3. **Reload Cursor.**
 `Cmd+Shift+P` → **Developer: Reload Window** to apply the config.
 
-### Step 4 — Authorize via Google OAuth
+4. **Authorize via Google OAuth.**
 The first time Cursor calls a sheets-mcp tool, it opens the OIDC authorize URL in your browser. Sign in and grant Sheets + Drive scopes.
 
     Once authorized, the session is stored in Supabase and reused on all subsequent calls — no repeated consent.
@@ -82,3 +80,12 @@ API keys have no expiry by default and resolve to the same Google OAuth session 
 | OAuth window does not open | Cursor uses the system browser. Ensure your default browser is set. |
 | Tools visible but returning errors | Open Cursor DevTools (`Help → Toggle Developer Tools`) and check the MCP panel. |
 | `needsAuth: true` in response | Refresh token revoked. Sign out from dashboard and re-authorize. |
+
+
+---
+
+## What to do next
+
+- [Connect Claude Desktop](/docs/guides/connect-claude)
+- [SQL in Sheets](/docs/guides/sql-in-sheets)
+- [Authentication](/docs/authentication)
