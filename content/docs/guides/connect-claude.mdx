@@ -10,33 +10,36 @@ description: "Step-by-step guide to wiring sheets-mcp into Claude Desktop via OI
 
 ---
 
-### Step 1 — Open the Claude Desktop config file
+1. **Open the Claude Desktop config file.**
+
 **macOS:**
-    ```bash
-    open ~/Library/Application\ Support/Claude/
-    ```
+```bash
+open ~/Library/Application\ Support/Claude/
+```
 
-    **Windows:**
-    ```
-    %APPDATA%\Claude\
-    ```
+**Windows:**
+```
+%APPDATA%\Claude\
+```
 
-    Open `claude_desktop_config.json` in your editor. If it does not exist, create it.
+Open `claude_desktop_config.json` in your editor. If it does not exist, create it.
 
-### Step 2 — Add the sheets-mcp server
+2. **Add the sheets-mcp server.**
+
 ```json
-    {
-      "mcpServers": {
-        "sheets-mcp": {
-          "url": "https://sheets-mcp-xi.vercel.app/api/mcp"
-        }
-      }
+{
+  "mcpServers": {
+    "sheets-mcp": {
+      "url": "https://sheets-mcp-xi.vercel.app/api/mcp"
     }
-    ```
+  }
+}
+```
 
-    If you already have other MCP servers, add `sheets-mcp` as a new key inside `mcpServers`.
+If you already have other MCP servers, add `sheets-mcp` as a new key inside `mcpServers`.
 
-### Step 3 — Restart Claude Desktop
+3. **Restart Claude Desktop.**
+
 Fully quit and relaunch Claude Desktop. On restart, Claude detects the new MCP server and initiates the OIDC auth handshake — it discovers the authorization endpoint from `/.well-known/oauth-authorization-server` automatically.
 
 ### Step 4 — Complete Google OAuth consent
