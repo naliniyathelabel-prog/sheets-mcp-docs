@@ -25,7 +25,7 @@ The virtual table name used inside `analyze_range` and `transform_range` SQL que
 
 ```sql
 -- You write:
-SELECT data → >'Region', SUM((data → >'Revenue')::numeric)
+SELECT data->>'Region', SUM((data->>'Revenue')::numeric)
 FROM sheet_data GROUP BY 1
 
 -- sheets-mcp wraps it as:
@@ -147,3 +147,12 @@ sheets-mcp uses the **Streamable HTTP** transport (the modern MCP transport as o
 | **Google session** | Same user Google OAuth token | Same user Google OAuth token |
 
 Both paths resolve to the same Google OAuth access token internally. There is no functional difference in what the MCP tools can access.
+
+
+---
+
+## What to do next
+
+- [Analyze Tools](/docs/tools/analyze)
+- [SQL in Sheets](/docs/guides/sql-in-sheets)
+- [Architecture](/docs/concepts/architecture)
