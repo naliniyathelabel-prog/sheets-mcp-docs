@@ -15,6 +15,22 @@ There is no separate auth service, API gateway, or sidecar. One repo, one Vercel
 
 ---
 
+```mermaid
+sequenceDiagram
+  participant Client as MCP Client
+  participant Proxy as proxy.ts
+  participant Core as /api/[transport]
+  participant DB as Supabase / Postgres
+  participant Sheets as Google Sheets API
+
+  Client->>Proxy: Bearer JWT or x-api-key
+  Proxy->>Core: Forward request
+  Core->>DB: Resolve auth + session
+  Core->>Sheets: Call tool handler
+  Sheets-->>Core: Result
+  Core-->>Client: MCP response
+```
+
 ## Request flow
 
 ```
@@ -181,3 +197,12 @@ Deployed to Vercel via **CLI only** (`vercel --prod`). No GitHub ↔ Vercel inte
 - Drive API **enabled**
 - OAuth consent screen configured (add test users if in "Testing" mode)
 - OAuth Client ID (Web Application) with redirect URI: `https://sheets-mcp-xi.vercel.app/api/auth/callback/google`
+
+
+---
+
+## What to do next
+
+- [Authentication](/docs/authentication)
+- [Safety Systems](/docs/concepts/safety)
+- [Tools Overview](/docs/tools/overview)
